@@ -1,0 +1,38 @@
+Team Name :
+Problem Statement :
+Team Leader Name :
+
+Solution Overview
+What is your proposed solution?
+What differentiates your approach from traditional candidate matching systems?
+
+JD Understanding & Candidate Evaluation
+What are the key requirements extracted from the JD?
+Which candidate signals are most important for determining relevance? / How does your solution evaluate candidate fit beyond keyword matching?
+
+Ranking Methodology
+How does your system retrieve, score, and rank candidates?
+What models, algorithms, or heuristics are used?
+How are multiple candidate signals combined into a final ranking?
+
+Explainability & Data Validation
+How are ranking decisions explained?
+How do you prevent hallucinations or unsupported justifications?
+How does your solution handle inconsistent, low-quality, or suspicious profiles?
+
+End-to-End Workflow
+What is the complete workflow from JD input to ranked candidate output?
+
+System Architecture
+
+Results & Performance
+What results or insights demonstrate ranking quality?
+How does your solution meet the challenge's runtime and compute constraints?
+
+Technologies Used
+What technologies, frameworks, and tools were used and why were they
+selected for this solution?
+
+Submission Assets
+Github video etc
+

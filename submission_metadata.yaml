@@ -1,0 +1,54 @@
+# Redrob Hackathon — Submission Metadata
+# Fill team-specific fields before portal upload.
+
+team_name: "Sarva Automata"
+
+primary_contact:
+  name: "Full Name"
+  email: "primary@example.com"
+  phone: "+91-XXXXXXXXXX"
+
+team_members:
+  - name: "Member 1 Full Name"
+    email: "member1@example.com"
+    role: "ML Engineer"
+
+github_repo: "https://github.com/YOUR_USERNAME/YOUR_REPO"
+sandbox_link: "https://huggingface.co/spaces/YOUR_USERNAME/redrob-ranker"
+
+reproduce_command: "python rank.py --candidates ./challenge/candidates.jsonl --out ./submission.csv"
+
+compute:
+  platform: "Windows 11 / Local dev machine"
+  cpu_cores: 8
+  ram_gb: 16
+  python_version: "3.12.0"
+  os: "Windows 11"
+  uses_gpu_for_inference: false
+  has_network_during_ranking: false
+  pre_computation_required: true
+  pre_computation_time_minutes: 90
+
+ai_tools_used:
+  - "Cursor"
+  - "Gemini"
+
+ai_usage_summary: |
+  Used Cursor for architecture, code generation, and refactoring.
+  Gemini API used offline only for JD parsing and batch archetype labeling.
+  No candidate data sent to LLMs during ranking runtime.
+
+methodology_summary: |
+  Hybrid retrieval (BM25 + BGE dense + RRF) feeds a LightGBM LambdaRank
+  model trained on silver labels. Top-400 candidates are reranked with a
+  BGE cross-encoder. Trap and honeypot penalties filter keyword stuffers
+  and incoherent profiles. Behavioral redrob_signals act as a multiplicative
+  availability modifier. Gemini runs offline only; ranking is CPU-only with
+  no network in under 5 minutes.
+
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: false
+  reproduction_tested: false

@@ -1,0 +1,303 @@
+{
+  "candidates_path": "C:\\Users\\ashok\\Documents\\Hackathon\\IndiaRuns\\recruiter-candidate\\challenge\\candidates.jsonl",
+  "candidates_analyzed": 100000,
+  "candidates_total_in_file": 100000,
+  "limit_applied": null,
+  "profile": {
+    "top_titles": [
+      [
+        "business analyst",
+        5833
+      ],
+      [
+        "hr manager",
+        5830
+      ],
+      [
+        "mechanical engineer",
+        5791
+      ],
+      [
+        "accountant",
+        5764
+      ],
+      [
+        "project manager",
+        5754
+      ],
+      [
+        "customer support",
+        5750
+      ],
+      [
+        "operations manager",
+        5744
+      ],
+      [
+        "content writer",
+        5727
+      ],
+      [
+        "sales executive",
+        5713
+      ],
+      [
+        "civil engineer",
+        5702
+      ],
+      [
+        "graphic designer",
+        5689
+      ],
+      [
+        "marketing manager",
+        5524
+      ],
+      [
+        "software engineer",
+        3450
+      ],
+      [
+        "full stack developer",
+        2873
+      ],
+      [
+        "cloud engineer",
+        2836
+      ],
+      [
+        "java developer",
+        2809
+      ],
+      [
+        ".net developer",
+        2788
+      ],
+      [
+        "devops engineer",
+        2787
+      ],
+      [
+        "mobile developer",
+        2757
+      ],
+      [
+        "frontend engineer",
+        2738
+      ],
+      [
+        "qa engineer",
+        2682
+      ],
+      [
+        "analytics engineer",
+        764
+      ],
+      [
+        "data engineer",
+        744
+      ],
+      [
+        "data analyst",
+        728
+      ],
+      [
+        "backend engineer",
+        704
+      ]
+    ],
+    "top_countries": [
+      [
+        "India",
+        75113
+      ],
+      [
+        "USA",
+        9978
+      ],
+      [
+        "Australia",
+        2579
+      ],
+      [
+        "Canada",
+        2506
+      ],
+      [
+        "UK",
+        2472
+      ],
+      [
+        "Germany",
+        2469
+      ],
+      [
+        "Singapore",
+        2453
+      ],
+      [
+        "UAE",
+        2430
+      ]
+    ],
+    "top_industries": [
+      [
+        "it services",
+        29881
+      ],
+      [
+        "software",
+        22417
+      ],
+      [
+        "manufacturing",
+        22305
+      ],
+      [
+        "conglomerate",
+        7571
+      ],
+      [
+        "paper products",
+        7467
+      ],
+      [
+        "fintech",
+        2808
+      ],
+      [
+        "food delivery",
+        2514
+      ],
+      [
+        "e-commerce",
+        1529
+      ],
+      [
+        "consulting",
+        1274
+      ],
+      [
+        "edtech",
+        610
+      ],
+      [
+        "saas",
+        328
+      ],
+      [
+        "ai/ml",
+        278
+      ],
+      [
+        "adtech",
+        172
+      ],
+      [
+        "transportation",
+        162
+      ],
+      [
+        "insurance tech",
+        155
+      ]
+    ],
+    "yoe_distribution": {
+      "5-9": 33520,
+      "9-15": 31748,
+      "0-3": 16120,
+      "3-5": 18605,
+      "15+": 7
+    },
+    "skill_count_distribution": {
+      "16+": 6650,
+      "6-10": 64228,
+      "11-15": 23573,
+      "0-5": 5549
+    }
+  },
+  "traps": {
+    "known_template_hashes": [
+      "03fdb47f3db0",
+      "046bc838535d",
+      "1c8d46642c94",
+      "2f3df0fbcafd",
+      "5468e1b37aa2",
+      "592133a664e0",
+      "979634cabf2b",
+      "f97cca022153"
+    ],
+    "top_recycled_description_hashes": [
+      [
+        "1c8d46642c94",
+        25515
+      ],
+      [
+        "5468e1b37aa2",
+        25290
+      ],
+      [
+        "03fdb47f3db0",
+        25237
+      ],
+      [
+        "046bc838535d",
+        25207
+      ],
+      [
+        "592133a664e0",
+        25164
+      ],
+      [
+        "2f3df0fbcafd",
+        25104
+      ],
+      [
+        "f97cca022153",
+        25078
+      ],
+      [
+        "979634cabf2b",
+        25071
+      ],
+      [
+        "eafc1d27bc20",
+        25029
+      ],
+      [
+        "6aefef67e5fa",
+        10125
+      ],
+      [
+        "053a52572783",
+        10055
+      ],
+      [
+        "e27b840633ad",
+        10025
+      ]
+    ],
+    "candidates_all_roles_template": 47639,
+    "known_template_role_occurrences": 201666
+  },
+  "honeypots": {
+    "detected_count": 44,
+    "detection_rate": 0.0004,
+    "rule_hit_counts": {
+      "R7": 47639,
+      "R4": 18865,
+      "R11": 1023,
+      "R6": 23,
+      "R1": 21,
+      "R2": 19
+    }
+  },
+  "silver_tier_preview": {
+    "0": 44,
+    "1": 68926,
+    "2": 26532,
+    "3": 4164,
+    "4": 207,
+    "5": 127
+  }
+}

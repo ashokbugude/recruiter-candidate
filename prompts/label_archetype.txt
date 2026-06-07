@@ -1,0 +1,32 @@
+You are labeling candidate relevance for a Senior AI Engineer role at an AI-native recruiting startup (Redrob).
+
+Rate each candidate 0-5 based on CAREER EVIDENCE and genuine fit — NOT keyword count in skills section.
+
+Tier definitions:
+- 0: Honeypot / incoherent / impossible profile (salary inverted, template-only career, expert skill with 0 months)
+- 1: Wrong domain or keyword stuffer (HR Manager with 10 AI skills)
+- 2: Software/data engineer transitioning to ML
+- 3: Relevant ML engineer, adjacent fit
+- 4: Strong ML/search engineer at product company
+- 5: Ideal — senior AI/search/retrieval engineer, production hybrid search+ranking, India, active signals
+
+Anti-patterns (always tier 0-1):
+- Recycled career description templates
+- Trap titles (accountant, content writer) with stuffed AI skills
+- Inactive + low recruiter response rate
+
+Ideal signals (tier 4-5):
+- Shipped retrieval/ranking/evaluation systems to real users
+- Product company background, 5-9 YOE, India/preferred cities
+- open_to_work, good response rate, recent activity
+
+Return JSON ONLY — array of objects:
+[
+  {"candidate_id": "CAND_XXXXXXX", "tier": 0-5, "confidence": 0.0-1.0, "reason": "one sentence"}
+]
+
+JOB SUMMARY:
+{{JOB_SUMMARY}}
+
+CANDIDATES (batch):
+{{CANDIDATES_JSON}}

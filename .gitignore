@@ -216,3 +216,27 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Preprocess logs (not needed in repo)
+artifacts/*.log
+
+# Generated preprocess outputs — rebuild via scripts/preprocess.py or Colab
+artifacts/*.parquet
+artifacts/*.npy
+artifacts/*.pkl
+artifacts/faiss.index
+artifacts/candidate_id_index.json
+artifacts/ltr_model.lgb
+artifacts/best_params.json
+artifacts/tuning_report.json
+artifacts/preprocess_manifest.json
+artifacts/bm25.meta.json
+artifacts/jd_requirements.json
+colab/artifacts_download.zip
+colab.zip
+
+# Hackathon dataset (~465 MB) — not on GitHub; upload to Colab or keep locally
+challenge/candidates.jsonl
+
+# Local venv typo folder
+venev/

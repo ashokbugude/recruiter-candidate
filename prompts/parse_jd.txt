@@ -1,0 +1,31 @@
+You are an expert technical recruiter parsing a job description for a candidate ranking system.
+
+Extract structured hiring requirements for this role. The ranking system must NOT optimize for keyword count — it must identify genuine fit based on career evidence, production ML/search experience, and behavioral availability signals.
+
+Return JSON ONLY (no markdown) matching this schema:
+{
+  "role_title": "string",
+  "must_have_skills": ["string"],
+  "nice_to_have_skills": ["string"],
+  "must_have_keywords": ["string"],
+  "target_titles": ["string"],
+  "disqualifiers": ["string"],
+  "yoe_min": number,
+  "yoe_max": number,
+  "preferred_country": "string",
+  "preferred_cities": ["string"]
+}
+
+Rules:
+1. must_have_skills: production retrieval, embeddings, ranking, Python, evaluation (NDCG/MAP), hybrid search
+2. nice_to_have_skills: LLM fine-tuning, LTR, vector DBs (FAISS/Pinecone), MLOps
+3. target_titles: senior AI/ML/search/recommendation engineer variants
+4. disqualifiers: keyword stuffers, consulting-only, pure research, inactive profiles, title-chasers
+5. yoe_min/yoe_max: infer from JD band (typically 5-9)
+6. preferred_country: India; preferred_cities: Pune, Noida, Hyderabad, Mumbai, Bangalore, Delhi NCR
+
+Example ideal signals (NOT names): shipped hybrid retrieval+r ranking at product company; 6y India; active on platform.
+Example trap signals (NOT names): Marketing Manager with 12 AI skills; recycled career text; salary min > max.
+
+JOB DESCRIPTION:
+{{JOB_DESCRIPTION}}
