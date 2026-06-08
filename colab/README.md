@@ -8,8 +8,28 @@ Run offline preprocess on a **CUDA GPU** (fast BGE embeddings). Outputs land in 
 2. **Runtime → Change runtime type → T4 GPU**
 3. Run all cells (notebook clones from GitHub)
 4. Upload **`challenge/candidates.jsonl`** when prompted (~465 MB, not in git)
-5. Set Colab Secret **`GEMINI_API_KEY`**
+5. Provide Gemini credentials (see below)
 6. Download **`colab/artifacts_download.zip`** → extract into local **`artifacts/`**
+
+## Gemini authentication (ADC)
+
+The notebook uses **Application Default Credentials** via the `google-genai` SDK — no API key required when you have an `authorized_user` JSON with `refresh_token`.
+
+**Option A — Colab Secret (recommended):**
+
+1. Sidebar → **Secrets** → add **`GOOGLE_ADC_JSON`**
+2. Paste the full JSON (fields: `client_id`, `client_secret`, `quota_project_id`, `refresh_token`, `type`, `universe_domain`)
+3. Enable notebook access
+
+**Option B — file upload:** run the auth cell and upload your credentials JSON when prompted.
+
+Locally, save the same JSON as `credentials/adc.json` and set:
+
+```
+GOOGLE_APPLICATION_CREDENTIALS=./credentials/adc.json
+```
+
+**Fallback:** `GEMINI_API_KEY` still works if you prefer an API key.
 
 ## What Colab runs
 
@@ -20,12 +40,6 @@ Run offline preprocess on a **CUDA GPU** (fast BGE embeddings). Outputs land in 
 | **BGE embeddings** | **Yes (~15–45 min)** | `bge_embeddings.npy`, `faiss.index` |
 | **Gemini JD + labels** | No (API) | `jd_requirements.json`, `gemini_tiers.parquet` |
 
-## Gemini API key
-
-1. Colab sidebar → **Secrets** → add **`GEMINI_API_KEY`**
-2. Enable notebook access
-3. In notebook: `USE_GEMINI = True`
-
 ## After Colab (on your PC)
 
 ```powershell
@@ -34,7 +48,7 @@ python scripts/train_ltr.py
 python rank.py --candidates ./challenge/candidates.jsonl --out ./submission.csv
 ```
 
-Set `REDROB_SKIP_GEMINI=1` in `.env` to avoid re-spending Gemini credits locally.
+Set `REDROB_SKIP_GEMINI=1` in `.env` to avoid re-calling Gemini locally.
 
 ## Files
 

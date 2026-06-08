@@ -240,3 +240,7 @@ challenge/candidates.jsonl
 
 # Local venv typo folder
 venev/
+
+# Google ADC / OAuth credentials (never commit)
+credentials/
+**/adc.json

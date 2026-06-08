@@ -1,4 +1,8 @@
-"""Gemini API client — offline preprocessing only (never used at rank time)."""
+"""Gemini client — offline preprocessing only (never used at rank time).
+
+Authenticates via Application Default Credentials (OAuth refresh token JSON) when
+``GOOGLE_APPLICATION_CREDENTIALS`` is set, otherwise falls back to ``GEMINI_API_KEY``.
+"""
 
 from __future__ import annotations
 
@@ -6,11 +10,15 @@ import json
 import logging
 import os
 import re
-from typing import Any
+from functools import lru_cache
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from google import genai
 
 logger = logging.getLogger(__name__)
 
-# Defaults updated for current Google AI API (1.5 models retired on many keys).
 DEFAULT_GEMINI_PRO_MODEL = "gemini-2.5-pro"
 DEFAULT_GEMINI_FLASH_MODEL = "gemini-3.5-flash"
 
@@ -29,8 +37,8 @@ PRO_MODEL_FALLBACKS: tuple[str, ...] = (
 
 
 def get_api_key(settings) -> str | None:
-    """Return configured API key from settings or GEMINI_API_KEY env var."""
-    key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY")
+    """Return API key from settings or GEMINI_API_KEY env (optional fallback)."""
+    key = settings.gemini_api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if key and key.strip() and key.strip() != "your_gemini_api_key_here":
         return key.strip()
     return None
@@ -44,31 +52,61 @@ def resolve_pro_model(settings) -> str:
     return getattr(settings, "gemini_pro_model", None) or DEFAULT_GEMINI_PRO_MODEL
 
 
+def has_gemini_auth(settings) -> bool:
+    """True when an API key or Application Default Credentials are available."""
+    if get_api_key(settings):
+        return True
+    creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if creds_path and Path(creds_path).is_file():
+        return True
+    try:
+        import google.auth
+
+        credentials, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        return credentials is not None
+    except Exception:
+        return False
+
+
+@lru_cache(maxsize=1)
+def get_genai_client(api_key: str | None) -> genai.Client:
+    """Cached Gemini client — ADC when no API key is provided."""
+    from google import genai
+
+    if api_key:
+        logger.info("Gemini auth: API key")
+        return genai.Client(api_key=api_key)
+    logger.info("Gemini auth: Application Default Credentials")
+    return genai.Client()
+
+
 def generate_json(
     prompt: str,
     *,
-    api_key: str,
+    settings,
     model: str = DEFAULT_GEMINI_FLASH_MODEL,
     temperature: float = 0.0,
     model_fallbacks: tuple[str, ...] | None = None,
 ) -> dict[str, Any] | list[Any]:
     """Call Gemini and parse JSON response, trying fallback models on 404."""
-    import google.generativeai as genai
+    from google.genai import types
 
-    genai.configure(api_key=api_key)
+    client = get_genai_client(get_api_key(settings))
     candidates = _candidate_models(model, model_fallbacks or FLASH_MODEL_FALLBACKS)
     last_error: Exception | None = None
 
     for model_name in candidates:
         try:
-            gemini_model = genai.GenerativeModel(
-                model_name=model_name,
-                generation_config={
-                    "temperature": temperature,
-                    "response_mime_type": "application/json",
-                },
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=temperature,
+                    response_mime_type="application/json",
+                ),
             )
-            response = gemini_model.generate_content(prompt)
             text = response.text or ""
             if model_name != model:
                 logger.info("Gemini call succeeded with fallback model %s", model_name)

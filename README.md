@@ -17,7 +17,7 @@ pip install -r requirements.txt
 
 python scripts/setup_artifacts.py
 python scripts/build_silver_labels.py
-copy .env.example .env         # set GEMINI_API_KEY (optional, offline only)
+copy .env.example .env         # set GOOGLE_APPLICATION_CREDENTIALS or GEMINI_API_KEY (offline only)
 
 python -m pytest tests/ -q
 ```
@@ -52,7 +52,7 @@ Requires `artifacts/`: features, BM25, FAISS embeddings, `ltr_model.lgb` (built 
 # Runtime → T4 GPU → open colab/preprocess_gpu.ipynb
 ```
 
-Upload `candidates.jsonl` to `challenge/` (not in git). Set Colab Secret `GEMINI_API_KEY` if using Gemini.
+Upload `candidates.jsonl` to `challenge/` (not in git). Set Colab Secret `GOOGLE_ADC_JSON` (ADC) or `GEMINI_API_KEY` if using Gemini.
 
 ## Project layout
 

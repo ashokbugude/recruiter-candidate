@@ -21,7 +21,7 @@ from app.constants import (
 from app.gemini_client import (
     PRO_MODEL_FALLBACKS,
     generate_json,
-    get_api_key,
+    has_gemini_auth,
     load_prompt_template,
     resolve_pro_model,
 )
@@ -103,14 +103,14 @@ def build_heuristic_requirements(jd_text: str) -> JDRequirements:
     )
 
 
-def parse_jd_with_gemini(jd_text: str, api_key: str, *, settings) -> JDRequirements:
+def parse_jd_with_gemini(jd_text: str, *, settings) -> JDRequirements:
     """Parse JD using Gemini Pro; falls back to heuristic on failure."""
     template = load_prompt_template("parse_jd.txt")
     prompt = template.replace("{{JOB_DESCRIPTION}}", jd_text)
     try:
         payload = generate_json(
             prompt,
-            api_key=api_key,
+            settings=settings,
             model=resolve_pro_model(settings),
             temperature=0.0,
             model_fallbacks=PRO_MODEL_FALLBACKS,
@@ -136,12 +136,11 @@ def load_or_build_jd_requirements(
         return JDRequirements.model_validate(json.loads(output_path.read_text(encoding="utf-8")))
 
     jd_text = jd_path.read_text(encoding="utf-8")
-    api_key = get_api_key(settings)
-    if api_key:
+    if has_gemini_auth(settings):
         logger.info("Parsing JD with Gemini Pro")
-        requirements = parse_jd_with_gemini(jd_text, api_key, settings=settings)
+        requirements = parse_jd_with_gemini(jd_text, settings=settings)
     else:
-        logger.warning("No GEMINI_API_KEY — using heuristic JD requirements")
+        logger.warning("No Gemini credentials — using heuristic JD requirements")
         requirements = build_heuristic_requirements(jd_text)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

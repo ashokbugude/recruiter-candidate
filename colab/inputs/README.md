@@ -23,11 +23,11 @@ If you already ran preprocess locally, upload these into `artifacts/` to **only 
 
 ## Optional Gemini on Colab
 
-Set `GEMINI_API_KEY` in Colab Secrets (see `colab/README.md`). Labels cost ~$15–25 (Flash); embeddings still use CUDA locally in Colab.
+Set `GOOGLE_ADC_JSON` (ADC credentials) or `GEMINI_API_KEY` in Colab Secrets (see `colab/README.md`).
 
 ## Not needed in Colab
 
-- Local `.env` file — use Colab **Secrets** (`GEMINI_API_KEY`) instead
+- Local `.env` file — use Colab **Secrets** (`GOOGLE_ADC_JSON` or `GEMINI_API_KEY`) instead
 - `venv/` — Colab has its own Python env.
 
 ## After Colab finishes

@@ -21,7 +21,7 @@ from app.feature_store import load_silver_tiers  # noqa: E402
 from app.gemini_client import (  # noqa: E402
     FLASH_MODEL_FALLBACKS,
     generate_json,
-    get_api_key,
+    has_gemini_auth,
     load_prompt_template,
     resolve_flash_model,
 )
@@ -51,7 +51,6 @@ def _compact_candidate(candidate: dict) -> dict:
 def label_batch_with_gemini(
     batch: list[dict],
     *,
-    api_key: str,
     job_summary: str,
     settings,
 ) -> dict[str, int]:
@@ -62,7 +61,7 @@ def label_batch_with_gemini(
     )
     payload = generate_json(
         prompt,
-        api_key=api_key,
+        settings=settings,
         model=resolve_flash_model(settings),
         temperature=0.0,
         model_fallbacks=FLASH_MODEL_FALLBACKS,
@@ -89,11 +88,11 @@ def build_gemini_tiers(
         logger.info("Loading cached Gemini tiers from %s", output_path)
         return pl.read_parquet(output_path)
 
-    api_key = None if skip_api else get_api_key(settings)
+    use_gemini = not skip_api and has_gemini_auth(settings)
     if skip_api:
         logger.info("skip_api=True — writing silver-tier labels only (no Gemini spend)")
-    elif not api_key:
-        logger.warning("No GEMINI_API_KEY — writing silver-tier fallback labels")
+    elif not use_gemini:
+        logger.warning("No Gemini credentials — writing silver-tier fallback labels")
     silver_path = settings.artifact_path("labels_silver.parquet")
     silver_tiers = load_silver_tiers(silver_path)
 
@@ -111,12 +110,12 @@ def build_gemini_tiers(
         tier = silver_tiers.get(cid, 2)
         source = "silver_fallback"
 
-        if api_key:
+        if use_gemini:
             batch.append(candidate)
             if len(batch) >= BATCH_SIZE:
                 try:
                     gemini_tiers = label_batch_with_gemini(
-                        batch, api_key=api_key, job_summary=job_summary, settings=settings
+                        batch, job_summary=job_summary, settings=settings
                     )
                     for c in batch:
                         c_id = str(c["candidate_id"])
@@ -144,10 +143,10 @@ def build_gemini_tiers(
 
         rows.append({"candidate_id": cid, "gemini_tier": tier, "label_source": source})
 
-    if api_key and batch:
+    if use_gemini and batch:
         try:
             gemini_tiers = label_batch_with_gemini(
-                batch, api_key=api_key, job_summary=job_summary, settings=settings
+                batch, job_summary=job_summary, settings=settings
             )
             for c in batch:
                 c_id = str(c["candidate_id"])
@@ -195,8 +194,8 @@ def main() -> int:
     candidates_path = (args.candidates or settings.candidates_path).resolve()
     out_path = (args.out or settings.artifact_path("gemini_tiers.parquet")).resolve()
 
-    if not get_api_key(settings):
-        logger.warning("No GEMINI_API_KEY — writing silver-tier fallback labels")
+    if not has_gemini_auth(settings):
+        logger.warning("No Gemini credentials — writing silver-tier fallback labels")
 
     build_gemini_tiers(
         candidates_path,

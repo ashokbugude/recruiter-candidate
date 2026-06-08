@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 import zipfile
@@ -42,18 +43,23 @@ def zip_artifacts(artifacts_dir: Path, zip_path: Path) -> None:
     print(f"Created {zip_path} ({zip_path.stat().st_size / 1_048_576:.1f} MB)")
 
 
-def check_gemini_key() -> None:
+def check_gemini_auth() -> None:
     sys.path.insert(0, str(PROJECT_ROOT))
     from app.config import get_settings
-    from app.gemini_client import get_api_key
+    from app.gemini_client import get_api_key, has_gemini_auth
 
     settings = get_settings()
-    key = get_api_key(settings)
-    if not key:
+    if not has_gemini_auth(settings):
         raise SystemExit(
-            "GEMINI_API_KEY not set. Add Colab Secret GEMINI_API_KEY or set os.environ before running."
+            "Gemini credentials not found. Set GOOGLE_APPLICATION_CREDENTIALS to your "
+            "authorized_user JSON, or set GEMINI_API_KEY."
         )
-    print(f"Gemini API key OK (…{key[-4:]})")
+    key = get_api_key(settings)
+    if key:
+        print(f"Gemini auth: API key (…{key[-4:]})")
+    else:
+        creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "(ADC default)")
+        print(f"Gemini auth: Application Default Credentials ({creds})")
 
 
 def main() -> int:
@@ -76,7 +82,7 @@ def main() -> int:
     device = check_cuda()
 
     if not args.skip_llm:
-        check_gemini_key()
+        check_gemini_auth()
         print("Gemini enabled: JD parse + 100K archetype labels (~$15–25 Flash, ~1–2 hrs)")
     else:
         print("Gemini skipped (--skip-llm): silver/heuristic labels only")
