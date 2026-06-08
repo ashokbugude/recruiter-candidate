@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -25,6 +26,7 @@ from app.gemini_client import (
     load_prompt_template,
     resolve_pro_model,
 )
+from app.progress import format_duration
 
 logger = logging.getLogger(__name__)
 
@@ -105,21 +107,29 @@ def build_heuristic_requirements(jd_text: str) -> JDRequirements:
 
 def parse_jd_with_gemini(jd_text: str, *, settings) -> JDRequirements:
     """Parse JD using Gemini Pro; falls back to heuristic on failure."""
+    model = resolve_pro_model(settings)
+    logger.info("JD parse: calling Gemini Pro (model=%s, %d chars)...", model, len(jd_text))
     template = load_prompt_template("parse_jd.txt")
     prompt = template.replace("{{JOB_DESCRIPTION}}", jd_text)
+    t0 = time.perf_counter()
     try:
         payload = generate_json(
             prompt,
             settings=settings,
-            model=resolve_pro_model(settings),
+            model=model,
             temperature=0.0,
             model_fallbacks=PRO_MODEL_FALLBACKS,
         )
         if isinstance(payload, dict):
             payload["source"] = "gemini_pro"
+            logger.info("JD parse: Gemini succeeded in %s", format_duration(time.perf_counter() - t0))
             return JDRequirements.model_validate(payload)
     except Exception as exc:
-        logger.warning("Gemini JD parse failed (%s); using heuristic fallback", exc)
+        logger.warning(
+            "Gemini JD parse failed after %s (%s); using heuristic fallback",
+            format_duration(time.perf_counter() - t0),
+            exc,
+        )
     return build_heuristic_requirements(jd_text)
 
 

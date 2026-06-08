@@ -12,6 +12,8 @@ from typing import Any
 
 from rank_bm25 import BM25Okapi
 
+from app.progress import ProgressTracker
+
 logger = logging.getLogger(__name__)
 
 TOKEN_PATTERN = re.compile(r"[a-z0-9+#./-]+")
@@ -31,12 +33,23 @@ class BM25Artifacts:
 def build_bm25_index(candidates: list[dict[str, Any]]) -> BM25Artifacts:
     from app.features import candidate_profile_text
 
+    total = len(candidates)
+    log_every = max(total // 20, 1) if total else 1
+    progress = ProgressTracker(
+        logger, label="BM25 tokenization", total=total, log_every=log_every, unit="candidates"
+    )
+
     ids: list[str] = []
     corpus: list[list[str]] = []
     for candidate in candidates:
         ids.append(str(candidate["candidate_id"]))
         corpus.append(tokenize(candidate_profile_text(candidate)))
+        progress.tick()
+
+    progress.finish(message="tokenization complete")
+    logger.info("BM25: building index for %d documents...", total)
     bm25 = BM25Okapi(corpus)
+    logger.info("BM25: index ready (%d docs)", total)
     return BM25Artifacts(bm25=bm25, candidate_ids=ids, corpus_size=len(ids))
 
 

@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -13,7 +15,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.artifacts_manifest import is_locked, write_manifest  # noqa: E402
 from app.bm25_index import build_bm25_index, save_bm25  # noqa: E402
-from app.candidates import load_candidates, load_candidates_list  # noqa: E402
+from app.candidates import count_candidates, load_candidates, load_candidates_list  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.embeddings import encode_candidates, save_embeddings  # noqa: E402
 from app.feature_store import (  # noqa: E402
@@ -25,6 +27,7 @@ from app.feature_store import (  # noqa: E402
 from app.features import FEATURE_NAMES  # noqa: E402
 from app.jd_requirements import load_or_build_jd_requirements  # noqa: E402
 from app.logging_setup import configure_logging  # noqa: E402
+from app.progress import format_duration  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +42,12 @@ def _skip_llm_calls(settings, artifacts_dir: Path, *, force_llm: bool = False) -
     if is_locked(artifacts_dir):
         return True
     return False
+
+
+def _candidate_total(candidates_path: Path, limit: int | None) -> int:
+    if limit is not None:
+        return limit
+    return count_candidates(candidates_path)
 
 
 def run_jd(settings, artifacts_dir: Path, *, force: bool = False, force_llm: bool = False) -> None:
@@ -59,6 +68,9 @@ def run_features(settings, candidates_path: Path, *, limit: int | None = None, f
         logger.info("Features exist at %s — skipping (use --force)", out_path)
         return
 
+    total = _candidate_total(candidates_path, limit)
+    logger.info("Feature extraction: %d candidates", total)
+
     jd = load_or_build_jd_requirements(
         settings.job_description_path,
         settings.jd_requirements_path,
@@ -74,7 +86,13 @@ def run_features(settings, candidates_path: Path, *, limit: int | None = None, f
         gemini = dict(zip(gdf["candidate_id"].to_list(), gdf["gemini_tier"].to_list(), strict=False))
 
     candidates = load_candidates(candidates_path, limit=limit)
-    frame = build_features_frame(candidates, jd, silver_tiers=silver, gemini_tiers=gemini)
+    frame = build_features_frame(
+        candidates,
+        jd,
+        silver_tiers=silver,
+        gemini_tiers=gemini,
+        total_candidates=total,
+    )
     validate_features_frame(frame)
     write_features_parquet(frame, out_path)
     logger.info("Feature columns: %d features + metadata", len(FEATURE_NAMES))
@@ -95,18 +113,31 @@ def run_embeddings(
         logger.info("Embeddings exist — skipping (use --force)")
         return
 
-    from app.embeddings import resolve_embedding_device
+    from app.embeddings import default_batch_size, resolve_embedding_device
 
     candidates = load_candidates_list(candidates_path, limit=limit)
     resolved = resolve_embedding_device(device)
-    logger.info("Encoding %d candidates with BGE-small on %s...", len(candidates), resolved)
+    effective_batch = batch_size or default_batch_size(resolved)
+    total = len(candidates)
+    batches = (total + effective_batch - 1) // effective_batch if total else 0
+    logger.info(
+        "Embeddings: encoding %d candidates on %s (batch_size=%d, ~%d batches, tqdm bar below)",
+        total,
+        resolved,
+        effective_batch,
+        batches,
+    )
+    t0 = time.perf_counter()
     matrix, ids = encode_candidates(
         candidates,
-        show_progress=len(candidates) > 100,
+        show_progress=total > 100,
         device=resolved,
         batch_size=batch_size,
     )
+    logger.info("Embeddings: encode finished in %s", format_duration(time.perf_counter() - t0))
+    t1 = time.perf_counter()
     save_embeddings(matrix, ids, npy_path=npy_path, index_path=index_path)
+    logger.info("Embeddings: saved FAISS + npy in %s", format_duration(time.perf_counter() - t1))
 
 
 def run_bm25(settings, candidates_path: Path, *, limit: int | None = None, force: bool = False) -> None:
@@ -115,6 +146,8 @@ def run_bm25(settings, candidates_path: Path, *, limit: int | None = None, force
         logger.info("BM25 index exists — skipping (use --force)")
         return
 
+    total = _candidate_total(candidates_path, limit)
+    logger.info("BM25: building index for %d candidates", total)
     candidates = load_candidates_list(candidates_path, limit=limit)
     artifacts = build_bm25_index(candidates)
     save_bm25(artifacts, bm25_path)
@@ -139,6 +172,9 @@ def run_labels(
         logger.info("Skipping Gemini labels (locked/skip-llm) — reusing %s", out_path)
         return
 
+    total = _candidate_total(candidates_path, limit)
+    logger.info("Gemini labels: %d candidates", total)
+
     jd = load_or_build_jd_requirements(
         settings.job_description_path,
         settings.jd_requirements_path,
@@ -153,6 +189,22 @@ def run_labels(
         force=force or force_llm,
         skip_api=_skip_llm_calls(settings, artifacts_dir, force_llm=force_llm),
     )
+
+
+def _run_named_step(
+    name: str,
+    fn: Callable[[], None],
+    *,
+    index: int | None = None,
+    total_steps: int | None = None,
+) -> None:
+    if index is not None and total_steps is not None:
+        logger.info("=== Pipeline step %d/%d: %s ===", index, total_steps, name)
+    else:
+        logger.info("=== Step: %s ===", name)
+    t0 = time.perf_counter()
+    fn()
+    logger.info("=== %s complete (elapsed %s) ===", name, format_duration(time.perf_counter() - t0))
 
 
 def main() -> int:
@@ -199,41 +251,95 @@ def main() -> int:
 
     candidates_path = (args.candidates or settings.candidates_path).resolve()
     step = args.step
+    pipeline_t0 = time.perf_counter()
 
-    if step in ("jd", "all"):
-        logger.info("=== Step: JD parse ===")
-        run_jd(settings, artifacts_dir, force=args.force, force_llm=args.force_llm)
-    if step in ("labels", "all"):
-        logger.info("=== Step: Gemini archetype labels ===")
-        run_labels(
-            settings,
-            candidates_path,
-            artifacts_dir,
-            limit=args.limit,
-            force=args.force,
-            force_llm=args.force_llm,
+    if step == "all":
+        total_candidates = _candidate_total(candidates_path, args.limit)
+        logger.info(
+            "Preprocess pipeline: %d candidates | step=all | force=%s | force_llm=%s | skip_llm=%s",
+            total_candidates,
+            args.force,
+            args.force_llm,
+            args.skip_llm,
         )
-    if step in ("features", "all"):
-        logger.info("=== Step: Feature extraction ===")
-        run_features(settings, candidates_path, limit=args.limit, force=args.force)
-    if step in ("embeddings", "all"):
-        logger.info("=== Step: BGE embeddings + FAISS ===")
-        run_embeddings(
-            settings,
-            candidates_path,
-            limit=args.limit,
-            force=args.force,
-            device=args.device,
-            batch_size=args.batch_size,
+        planned: list[tuple[str, Callable[[], None]]] = [
+            ("JD parse", lambda: run_jd(settings, artifacts_dir, force=args.force, force_llm=args.force_llm)),
+            (
+                "Gemini archetype labels",
+                lambda: run_labels(
+                    settings,
+                    candidates_path,
+                    artifacts_dir,
+                    limit=args.limit,
+                    force=args.force,
+                    force_llm=args.force_llm,
+                ),
+            ),
+            (
+                "Feature extraction",
+                lambda: run_features(settings, candidates_path, limit=args.limit, force=args.force),
+            ),
+            (
+                "BGE embeddings + FAISS",
+                lambda: run_embeddings(
+                    settings,
+                    candidates_path,
+                    limit=args.limit,
+                    force=args.force,
+                    device=args.device,
+                    batch_size=args.batch_size,
+                ),
+            ),
+            ("BM25 index", lambda: run_bm25(settings, candidates_path, limit=args.limit, force=args.force)),
+        ]
+        for idx, (name, fn) in enumerate(planned, start=1):
+            _run_named_step(name, fn, index=idx, total_steps=len(planned))
+        if not args.force_llm:
+            write_manifest(artifacts_dir, locked=is_locked(artifacts_dir))
+        logger.info(
+            "Preprocess pipeline complete — total elapsed %s",
+            format_duration(time.perf_counter() - pipeline_t0),
         )
-    if step in ("bm25", "all"):
-        logger.info("=== Step: BM25 index ===")
-        run_bm25(settings, candidates_path, limit=args.limit, force=args.force)
+        return 0
 
-    if step == "all" and not args.force_llm:
-        write_manifest(artifacts_dir, locked=is_locked(artifacts_dir))
+    if step == "jd":
+        _run_named_step("JD parse", lambda: run_jd(settings, artifacts_dir, force=args.force, force_llm=args.force_llm))
+    elif step == "labels":
+        _run_named_step(
+            "Gemini archetype labels",
+            lambda: run_labels(
+                settings,
+                candidates_path,
+                artifacts_dir,
+                limit=args.limit,
+                force=args.force,
+                force_llm=args.force_llm,
+            ),
+        )
+    elif step == "features":
+        _run_named_step(
+            "Feature extraction",
+            lambda: run_features(settings, candidates_path, limit=args.limit, force=args.force),
+        )
+    elif step == "embeddings":
+        _run_named_step(
+            "BGE embeddings + FAISS",
+            lambda: run_embeddings(
+                settings,
+                candidates_path,
+                limit=args.limit,
+                force=args.force,
+                device=args.device,
+                batch_size=args.batch_size,
+            ),
+        )
+    elif step == "bm25":
+        _run_named_step(
+            "BM25 index",
+            lambda: run_bm25(settings, candidates_path, limit=args.limit, force=args.force),
+        )
 
-    logger.info("Preprocessing step '%s' complete.", step)
+    logger.info("Preprocessing step '%s' complete (elapsed %s).", step, format_duration(time.perf_counter() - pipeline_t0))
     return 0
 
 

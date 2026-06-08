@@ -13,6 +13,7 @@ from app.constants import REFERENCE_DATE
 from app.features import FEATURE_NAMES, extract_features
 from app.jd_requirements import JDRequirements
 from app.labels.honeypots import detect_honeypot
+from app.progress import ProgressTracker
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ def build_features_frame(
     silver_tiers: dict[str, int] | None = None,
     gemini_tiers: dict[str, int] | None = None,
     reference_date=None,
+    total_candidates: int | None = None,
 ) -> pl.DataFrame:
     """Build feature DataFrame for all candidates."""
     ref = reference_date or REFERENCE_DATE
@@ -40,6 +42,17 @@ def build_features_frame(
     gemini_tiers = gemini_tiers or {}
 
     rows: list[dict[str, Any]] = []
+    progress = None
+    if total_candidates:
+        log_every = max(total_candidates // 20, 1)
+        progress = ProgressTracker(
+            logger,
+            label="Feature extraction",
+            total=total_candidates,
+            log_every=log_every,
+            unit="candidates",
+        )
+
     for candidate in candidates:
         cid = str(candidate["candidate_id"])
         feats = extract_features(candidate, jd, reference_date=ref)
@@ -51,6 +64,11 @@ def build_features_frame(
         row["is_trap"] = hp.is_trap
         row["should_exclude"] = hp.should_exclude
         rows.append(row)
+        if progress:
+            progress.tick()
+
+    if progress:
+        progress.finish()
 
     return pl.DataFrame(rows)
 

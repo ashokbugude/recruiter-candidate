@@ -7,11 +7,15 @@ import argparse
 import os
 import subprocess
 import sys
+import time
 import zipfile
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 COLAB_ROOT = Path(__file__).resolve().parent
+
+sys.path.insert(0, str(PROJECT_ROOT))
+from app.progress import format_duration  # noqa: E402
 
 
 def _run(cmd: list[str], *, cwd: Path) -> None:
@@ -60,7 +64,7 @@ def check_gemini_auth() -> None:
     else:
         creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "(ADC default)")
         project = os.environ.get("GOOGLE_CLOUD_PROJECT", "(from ADC file)")
-        location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+        location = os.environ.get("GOOGLE_CLOUD_LOCATION", "global")
         print(f"Gemini auth: Vertex AI ADC ({creds})")
         print(f"Vertex project={project}, location={location}")
     _client_for_settings(settings)
@@ -88,7 +92,7 @@ def main() -> int:
 
     if not args.skip_llm:
         check_gemini_auth()
-        print("Gemini enabled: JD parse + 100K archetype labels (~$15–25 Flash, ~1–2 hrs)")
+        print("Gemini enabled: JD parse + 100K archetype labels (~40–60 hrs on Vertex Flash)")
     else:
         print("Gemini skipped (--skip-llm): silver/heuristic labels only")
 
@@ -122,11 +126,15 @@ def main() -> int:
     if args.limit:
         cmd.extend(["--limit", str(args.limit)])
 
+    preprocess_t0 = time.perf_counter()
     _run(cmd, cwd=PROJECT_ROOT)
+    print(f"Preprocess finished in {format_duration(time.perf_counter() - preprocess_t0)}")
 
     artifacts = PROJECT_ROOT / "artifacts"
     if not args.no_zip:
+        zip_t0 = time.perf_counter()
         zip_artifacts(artifacts, args.zip)
+        print(f"Zip created in {format_duration(time.perf_counter() - zip_t0)}")
 
     print("\nDone. Copy artifacts/ from Colab to your local repo.")
     return 0

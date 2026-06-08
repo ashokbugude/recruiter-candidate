@@ -27,6 +27,7 @@ from app.gemini_client import (  # noqa: E402
 )
 from app.jd_requirements import JDRequirements  # noqa: E402
 from app.logging_setup import configure_logging  # noqa: E402
+from app.progress import ProgressTracker, format_duration  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,35 @@ def label_batch_with_gemini(
     return tiers
 
 
+def _rows_from_batch(
+    batch: list[dict],
+    gemini_tiers: dict[str, int],
+    silver_tiers: dict[str, int],
+) -> list[dict]:
+    rows: list[dict] = []
+    for c in batch:
+        c_id = str(c["candidate_id"])
+        rows.append(
+            {
+                "candidate_id": c_id,
+                "gemini_tier": gemini_tiers.get(c_id, silver_tiers.get(c_id, 2)),
+                "label_source": "gemini_flash" if c_id in gemini_tiers else "silver_fallback",
+            }
+        )
+    return rows
+
+
+def _silver_fallback_rows(batch: list[dict], silver_tiers: dict[str, int]) -> list[dict]:
+    return [
+        {
+            "candidate_id": str(c["candidate_id"]),
+            "gemini_tier": silver_tiers.get(str(c["candidate_id"]), 2),
+            "label_source": "silver_fallback",
+        }
+        for c in batch
+    ]
+
+
 def build_gemini_tiers(
     candidates_path: Path,
     output_path: Path,
@@ -104,71 +134,76 @@ def build_gemini_tiers(
     rows: list[dict] = []
     batch: list[dict] = []
     candidates = load_candidates_list(candidates_path, limit=limit) if limit else list(load_candidates(candidates_path))
+    total_candidates = len(candidates)
+    total_batches = (total_candidates + BATCH_SIZE - 1) // BATCH_SIZE if use_gemini else 0
 
-    for idx, candidate in enumerate(candidates):
-        cid = str(candidate["candidate_id"])
-        tier = silver_tiers.get(cid, 2)
-        source = "silver_fallback"
+    if use_gemini:
+        model = resolve_flash_model(settings)
+        logger.info(
+            "Gemini labeling: %d candidates in %d batches (batch_size=%d, model=%s)",
+            total_candidates,
+            total_batches,
+            BATCH_SIZE,
+            model,
+        )
+        batch_progress = ProgressTracker(
+            logger, label="Gemini labels", total=total_batches, log_every=1, unit="batches"
+        )
 
-        if use_gemini:
+        def flush_batch() -> None:
+            nonlocal batch
+            if not batch:
+                return
+            t0 = time.perf_counter()
+            try:
+                gemini_tiers = label_batch_with_gemini(batch, job_summary=job_summary, settings=settings)
+                rows.extend(_rows_from_batch(batch, gemini_tiers, silver_tiers))
+            except Exception as exc:
+                logger.warning("Gemini batch failed (%s); using silver fallback", exc)
+                rows.extend(_silver_fallback_rows(batch, silver_tiers))
+            batch_progress.tick()
+            logger.debug("Batch API call took %s", format_duration(time.perf_counter() - t0))
+            batch = []
+            time.sleep(SLEEP_SECONDS)
+
+        for candidate in candidates:
             batch.append(candidate)
             if len(batch) >= BATCH_SIZE:
-                try:
-                    gemini_tiers = label_batch_with_gemini(
-                        batch, job_summary=job_summary, settings=settings
-                    )
-                    for c in batch:
-                        c_id = str(c["candidate_id"])
-                        rows.append(
-                            {
-                                "candidate_id": c_id,
-                                "gemini_tier": gemini_tiers.get(c_id, silver_tiers.get(c_id, 2)),
-                                "label_source": "gemini_flash" if c_id in gemini_tiers else "silver_fallback",
-                            }
-                        )
-                except Exception as exc:
-                    logger.warning("Gemini batch failed (%s); using silver fallback", exc)
-                    for c in batch:
-                        c_id = str(c["candidate_id"])
-                        rows.append(
-                            {
-                                "candidate_id": c_id,
-                                "gemini_tier": silver_tiers.get(c_id, 2),
-                                "label_source": "silver_fallback",
-                            }
-                        )
-                batch = []
-                time.sleep(SLEEP_SECONDS)
-            continue
+                flush_batch()
 
-        rows.append({"candidate_id": cid, "gemini_tier": tier, "label_source": source})
-
-    if use_gemini and batch:
-        try:
-            gemini_tiers = label_batch_with_gemini(
-                batch, job_summary=job_summary, settings=settings
+        flush_batch()
+        batch_progress.finish(message="labeling complete")
+    else:
+        candidate_progress = ProgressTracker(
+            logger,
+            label="Silver tier labels",
+            total=total_candidates,
+            log_every=max(total_candidates // 20, 1),
+            unit="candidates",
+        )
+        for candidate in candidates:
+            cid = str(candidate["candidate_id"])
+            rows.append(
+                {
+                    "candidate_id": cid,
+                    "gemini_tier": silver_tiers.get(cid, 2),
+                    "label_source": "silver_fallback",
+                }
             )
-            for c in batch:
-                c_id = str(c["candidate_id"])
-                rows.append(
-                    {
-                        "candidate_id": c_id,
-                        "gemini_tier": gemini_tiers.get(c_id, silver_tiers.get(c_id, 2)),
-                        "label_source": "gemini_flash" if c_id in gemini_tiers else "silver_fallback",
-                    }
-                )
-        except Exception as exc:
-            logger.warning("Final Gemini batch failed (%s)", exc)
-            for c in batch:
-                c_id = str(c["candidate_id"])
-                rows.append(
-                    {"candidate_id": c_id, "gemini_tier": silver_tiers.get(c_id, 2), "label_source": "silver_fallback"}
-                )
+            candidate_progress.tick()
+        candidate_progress.finish()
 
     frame = pl.DataFrame(rows)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     frame.write_parquet(output_path)
-    logger.info("Wrote Gemini tiers: %d rows to %s", frame.height, output_path)
+    gemini_count = frame.filter(pl.col("label_source") == "gemini_flash").height
+    logger.info(
+        "Wrote Gemini tiers: %d rows (%d gemini_flash, %d silver_fallback) → %s",
+        frame.height,
+        gemini_count,
+        frame.height - gemini_count,
+        output_path,
+    )
     return frame
 
 

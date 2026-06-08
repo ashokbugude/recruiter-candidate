@@ -96,7 +96,7 @@ def _resolve_vertex_location(settings) -> str:
     return (
         getattr(settings, "google_cloud_location", None)
         or os.getenv("GOOGLE_CLOUD_LOCATION")
-        or "us-central1"
+        or "global"
     )
 
 
@@ -131,7 +131,7 @@ def get_genai_client(api_key: str | None, vertex_project: str | None, vertex_loc
     project = vertex_project or os.getenv("GOOGLE_CLOUD_PROJECT") or _project_from_credentials_file()
     if not project:
         raise RuntimeError("Vertex AI ADC: could not resolve GCP project ID")
-    location = vertex_location or os.getenv("GOOGLE_CLOUD_LOCATION") or "us-central1"
+    location = vertex_location or os.getenv("GOOGLE_CLOUD_LOCATION") or "global"
     logger.info("Gemini auth: Vertex AI ADC (project=%s, location=%s)", project, location)
     return genai.Client(
         vertexai=True,

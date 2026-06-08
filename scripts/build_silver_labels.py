@@ -11,7 +11,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.candidates import load_candidates  # noqa: E402
+from app.candidates import count_candidates, load_candidates  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.labels.silver import build_silver_labels, write_silver_labels  # noqa: E402
 from app.logging_setup import configure_logging  # noqa: E402
@@ -55,8 +55,12 @@ def main() -> int:
     labels_path = (args.labels_out or settings.artifact_path("labels_silver.parquet")).resolve()
     lists_path = (args.lists_out or settings.artifact_path("candidate_lists.json")).resolve()
 
-    logger.info("Building silver labels from %s", candidates_path)
-    rows, lists = build_silver_labels(load_candidates(candidates_path, limit=args.limit))
+    total = count_candidates(candidates_path) if args.limit is None else args.limit
+    logger.info("Building silver labels from %s (%d candidates)", candidates_path, total)
+    rows, lists = build_silver_labels(
+        load_candidates(candidates_path, limit=args.limit),
+        total_candidates=total,
+    )
     write_silver_labels(rows, lists, parquet_path=labels_path, lists_path=lists_path)
 
     logger.info(

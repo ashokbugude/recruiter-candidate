@@ -14,6 +14,7 @@ import polars as pl
 from app.constants import REFERENCE_DATE
 from app.labels.honeypots import detect_honeypot
 from app.labels.tiers import TierResult, assign_heuristic_tier
+from app.progress import ProgressTracker
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ def build_silver_labels(
     candidates: Iterator[dict[str, Any]],
     *,
     reference_date=None,
+    total_candidates: int | None = None,
 ) -> tuple[list[SilverLabelRow], dict[str, list[str]]]:
     """
     Generate silver labels and curated candidate lists.
@@ -61,12 +63,28 @@ def build_silver_labels(
         "manual_review_sample": [],
     }
 
+    progress = None
+    if total_candidates:
+        log_every = max(total_candidates // 20, 1)
+        progress = ProgressTracker(
+            logger,
+            label="Silver labels",
+            total=total_candidates,
+            log_every=log_every,
+            unit="candidates",
+        )
+
     for candidate in candidates:
         honeypot = detect_honeypot(candidate, reference_date=ref)
         tier_result = assign_heuristic_tier(candidate, honeypot)
         row = _to_row(tier_result, honeypot)
         rows.append(row)
         _update_lists(candidate, tier_result, honeypot, lists)
+        if progress:
+            progress.tick()
+
+    if progress:
+        progress.finish()
 
     lists["manual_review_sample"] = _stratified_sample(rows, sample_size=100)
 
