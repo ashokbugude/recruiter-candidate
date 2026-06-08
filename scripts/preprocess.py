@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 import time
@@ -41,10 +42,35 @@ def _candidate_total(candidates_path: Path, limit: int | None) -> int:
     return count_candidates(candidates_path)
 
 
+def _features_stale(settings) -> bool:
+    """True when JD was rebuilt after the feature parquet (skill/title features depend on JD)."""
+    feat_path = settings.artifact_path("candidate_features.parquet")
+    jd_path = settings.jd_requirements_path
+    if not feat_path.exists() or not jd_path.exists():
+        return False
+    return jd_path.stat().st_mtime_ns > feat_path.stat().st_mtime_ns
+
+
 def run_jd(settings, artifacts_dir: Path, *, force: bool = False, force_llm: bool = False) -> None:
-    if settings.jd_requirements_path.exists() and not force:
-        logger.info("Using cached JD requirements at %s", settings.jd_requirements_path)
-        return
+    jd_path = settings.jd_requirements_path
+    if jd_path.exists() and not force:
+        if gemini_jd_enabled(settings):
+            try:
+                cached = json.loads(jd_path.read_text(encoding="utf-8"))
+                if cached.get("source") != "gemini_pro":
+                    logger.info(
+                        "Cached JD source=%s but Gemini JD enabled — rebuilding with Gemini Pro",
+                        cached.get("source", "?"),
+                    )
+                    force = True
+                else:
+                    logger.info("Using cached gemini_pro JD requirements at %s", jd_path)
+                    return
+            except (OSError, json.JSONDecodeError):
+                force = True
+        else:
+            logger.info("Using cached JD requirements at %s", jd_path)
+            return
     if not gemini_jd_enabled(settings):
         logger.info("Gemini JD parse disabled — building heuristic JD requirements")
     load_or_build_jd_requirements(
@@ -58,8 +84,11 @@ def run_jd(settings, artifacts_dir: Path, *, force: bool = False, force_llm: boo
 def run_features(settings, candidates_path: Path, *, limit: int | None = None, force: bool = False) -> None:
     out_path = settings.artifact_path("candidate_features.parquet")
     if out_path.exists() and not force:
-        logger.info("Features exist at %s — skipping (use --force)", out_path)
-        return
+        if _features_stale(settings):
+            logger.info("JD requirements newer than features — rebuilding feature parquet")
+        else:
+            logger.info("Features exist at %s — skipping (use --force)", out_path)
+            return
 
     total = _candidate_total(candidates_path, limit)
     logger.info("Feature extraction: %d candidates", total)
