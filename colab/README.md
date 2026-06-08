@@ -13,7 +13,7 @@ Run offline preprocess on a **CUDA GPU** (fast BGE embeddings). Outputs land in 
 
 ## Gemini authentication (ADC)
 
-The notebook uses **Application Default Credentials** via the `google-genai` SDK — no API key required when you have an `authorized_user` JSON with `refresh_token`.
+The notebook uses **Application Default Credentials** via **Vertex AI** (not the Developer API key flow). Your `authorized_user` JSON with `refresh_token` must include `quota_project_id` (GCP project with Vertex AI enabled).
 
 **Option A — Colab Secret (recommended):**
 

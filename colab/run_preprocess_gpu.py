@@ -46,7 +46,7 @@ def zip_artifacts(artifacts_dir: Path, zip_path: Path) -> None:
 def check_gemini_auth() -> None:
     sys.path.insert(0, str(PROJECT_ROOT))
     from app.config import get_settings
-    from app.gemini_client import get_api_key, has_gemini_auth
+    from app.gemini_client import _client_for_settings, get_api_key, has_gemini_auth
 
     settings = get_settings()
     if not has_gemini_auth(settings):
@@ -59,7 +59,12 @@ def check_gemini_auth() -> None:
         print(f"Gemini auth: API key (…{key[-4:]})")
     else:
         creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "(ADC default)")
-        print(f"Gemini auth: Application Default Credentials ({creds})")
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT", "(from ADC file)")
+        location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+        print(f"Gemini auth: Vertex AI ADC ({creds})")
+        print(f"Vertex project={project}, location={location}")
+    _client_for_settings(settings)
+    print("Gemini client initialized OK")
 
 
 def main() -> int:

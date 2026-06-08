@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = Field(default=None)
     gemini_flash_model: str = Field(default="gemini-3.5-flash")
     gemini_pro_model: str = Field(default="gemini-2.5-pro")
+    # Used when authenticating via ADC (OAuth / service account) → Vertex AI
+    google_cloud_project: str | None = Field(default=None)
+    google_cloud_location: str = Field(default="us-central1")
     skip_gemini: bool = Field(
         default=False,
         description="If true, never call Gemini during preprocess (use cached/heuristic artifacts).",

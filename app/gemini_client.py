@@ -1,7 +1,9 @@
 """Gemini client — offline preprocessing only (never used at rank time).
 
-Authenticates via Application Default Credentials (OAuth refresh token JSON) when
-``GOOGLE_APPLICATION_CREDENTIALS`` is set, otherwise falls back to ``GEMINI_API_KEY``.
+Auth modes:
+- ``GEMINI_API_KEY`` → Gemini Developer API (``genai.Client(api_key=...)``)
+- ``GOOGLE_APPLICATION_CREDENTIALS`` (OAuth / service account) → Vertex AI
+  (``genai.Client(vertexai=True, project=..., location=...)``)
 """
 
 from __future__ import annotations
@@ -35,6 +37,8 @@ PRO_MODEL_FALLBACKS: tuple[str, ...] = (
     "gemini-2.0-flash",
 )
 
+_VERTEX_SCOPES = ("https://www.googleapis.com/auth/cloud-platform",)
+
 
 def get_api_key(settings) -> str | None:
     """Return API key from settings or GEMINI_API_KEY env (optional fallback)."""
@@ -52,6 +56,50 @@ def resolve_pro_model(settings) -> str:
     return getattr(settings, "gemini_pro_model", None) or DEFAULT_GEMINI_PRO_MODEL
 
 
+def _project_from_credentials_file() -> str | None:
+    creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if not creds_path:
+        return None
+    path = Path(creds_path)
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload.get("quota_project_id") or payload.get("project_id")
+
+
+def _resolve_vertex_project(settings) -> str:
+    project = (
+        getattr(settings, "google_cloud_project", None)
+        or os.getenv("GOOGLE_CLOUD_PROJECT")
+        or _project_from_credentials_file()
+    )
+    if project:
+        return project
+    try:
+        import google.auth
+
+        _, adc_project = google.auth.default(scopes=list(_VERTEX_SCOPES))
+        if adc_project:
+            return adc_project
+    except Exception:
+        pass
+    raise RuntimeError(
+        "Vertex AI requires a GCP project ID. Set GOOGLE_CLOUD_PROJECT, "
+        "REDROB_GOOGLE_CLOUD_PROJECT, or include quota_project_id in your ADC JSON."
+    )
+
+
+def _resolve_vertex_location(settings) -> str:
+    return (
+        getattr(settings, "google_cloud_location", None)
+        or os.getenv("GOOGLE_CLOUD_LOCATION")
+        or "us-central1"
+    )
+
+
 def has_gemini_auth(settings) -> bool:
     """True when an API key or Application Default Credentials are available."""
     if get_api_key(settings):
@@ -62,24 +110,46 @@ def has_gemini_auth(settings) -> bool:
     try:
         import google.auth
 
-        credentials, _ = google.auth.default(
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
-        )
+        credentials, _ = google.auth.default(scopes=list(_VERTEX_SCOPES))
         return credentials is not None
     except Exception:
         return False
 
 
-@lru_cache(maxsize=1)
-def get_genai_client(api_key: str | None) -> genai.Client:
-    """Cached Gemini client — ADC when no API key is provided."""
+@lru_cache(maxsize=2)
+def get_genai_client(api_key: str | None, vertex_project: str | None, vertex_location: str | None) -> genai.Client:
+    """Cached Gemini client."""
     from google import genai
 
     if api_key:
-        logger.info("Gemini auth: API key")
+        logger.info("Gemini auth: API key (Developer API)")
         return genai.Client(api_key=api_key)
-    logger.info("Gemini auth: Application Default Credentials")
-    return genai.Client()
+
+    import google.auth
+
+    credentials, _ = google.auth.default(scopes=list(_VERTEX_SCOPES))
+    project = vertex_project or os.getenv("GOOGLE_CLOUD_PROJECT") or _project_from_credentials_file()
+    if not project:
+        raise RuntimeError("Vertex AI ADC: could not resolve GCP project ID")
+    location = vertex_location or os.getenv("GOOGLE_CLOUD_LOCATION") or "us-central1"
+    logger.info("Gemini auth: Vertex AI ADC (project=%s, location=%s)", project, location)
+    return genai.Client(
+        vertexai=True,
+        project=project,
+        location=location,
+        credentials=credentials,
+    )
+
+
+def _client_for_settings(settings) -> genai.Client:
+    api_key = get_api_key(settings)
+    if api_key:
+        return get_genai_client(api_key, None, None)
+    return get_genai_client(
+        None,
+        _resolve_vertex_project(settings),
+        _resolve_vertex_location(settings),
+    )
 
 
 def generate_json(
@@ -93,7 +163,7 @@ def generate_json(
     """Call Gemini and parse JSON response, trying fallback models on 404."""
     from google.genai import types
 
-    client = get_genai_client(get_api_key(settings))
+    client = _client_for_settings(settings)
     candidates = _candidate_models(model, model_fallbacks or FLASH_MODEL_FALLBACKS)
     last_error: Exception | None = None
 
