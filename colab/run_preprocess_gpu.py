@@ -50,7 +50,7 @@ def zip_artifacts(artifacts_dir: Path, zip_path: Path) -> None:
 def check_gemini_auth() -> None:
     sys.path.insert(0, str(PROJECT_ROOT))
     from app.config import get_settings
-    from app.gemini_client import _client_for_settings, get_api_key, has_gemini_auth
+    from app.gemini_client import _client_for_settings, gemini_jd_enabled, gemini_labels_enabled, get_api_key, has_gemini_auth
 
     settings = get_settings()
     if not has_gemini_auth(settings):
@@ -68,7 +68,9 @@ def check_gemini_auth() -> None:
         print(f"Gemini auth: Vertex AI ADC ({creds})")
         print(f"Vertex project={project}, location={location}")
     _client_for_settings(settings)
-    print("Gemini client initialized OK")
+    print(
+        f"Gemini client OK | jd_parse={gemini_jd_enabled(settings)} | labels={gemini_labels_enabled(settings)}"
+    )
 
 
 def main() -> int:
@@ -77,24 +79,45 @@ def main() -> int:
         "--step",
         choices=("all", "embeddings", "features", "bm25", "labels"),
         default="all",
-        help="Preprocess step (default: all with --skip-llm).",
+        help="Preprocess step (default: all).",
     )
-    parser.add_argument("--skip-llm", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--force-llm", action="store_true")
+    parser.add_argument(
+        "--gemini-jd",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Gemini Pro JD parse (~30s). Default: on.",
+    )
+    parser.add_argument(
+        "--gemini-labels",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Gemini Flash 100K labels (~40-60h). Default: off.",
+    )
+    parser.add_argument("--skip-llm", action="store_true", help="Disable all Gemini (legacy).")
+    parser.add_argument("--force-llm", action="store_true", help="Re-run Gemini labels.")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--zip", type=Path, default=COLAB_ROOT / "artifacts_download.zip")
     parser.add_argument("--no-zip", action="store_true")
     args = parser.parse_args()
 
+    if args.skip_llm:
+        args.gemini_jd = False
+        args.gemini_labels = False
+
     sys.path.insert(0, str(PROJECT_ROOT))
     device = check_cuda()
 
-    if not args.skip_llm:
+    if args.gemini_jd or args.gemini_labels:
         check_gemini_auth()
-        print("Gemini enabled: JD parse + 100K archetype labels (~40–60 hrs on Vertex Flash)")
+        if args.gemini_jd and args.gemini_labels:
+            print("Gemini: JD parse + 100K labels (~40-60 hrs for labels)")
+        elif args.gemini_jd:
+            print("Gemini: JD parse only (~30s)")
+        else:
+            print("Gemini: 100K labels only (~40-60 hrs)")
     else:
-        print("Gemini skipped (--skip-llm): silver/heuristic labels only")
+        print("Gemini disabled — heuristic JD + silver labels")
 
     candidates = PROJECT_ROOT / "challenge" / "candidates.jsonl"
     if not candidates.exists():
@@ -119,9 +142,15 @@ def main() -> int:
     ]
     if args.force:
         cmd.append("--force")
-    if args.skip_llm:
-        cmd.append("--skip-llm")
-    elif args.force or args.force_llm:
+    if args.gemini_jd:
+        cmd.append("--gemini-jd")
+    else:
+        cmd.append("--no-gemini-jd")
+    if args.gemini_labels:
+        cmd.append("--gemini-labels")
+    else:
+        cmd.append("--no-gemini-labels")
+    if args.force_llm:
         cmd.append("--force-llm")
     if args.limit:
         cmd.extend(["--limit", str(args.limit)])

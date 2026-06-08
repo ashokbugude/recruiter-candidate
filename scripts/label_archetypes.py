@@ -20,6 +20,7 @@ from app.config import get_settings  # noqa: E402
 from app.feature_store import load_silver_tiers  # noqa: E402
 from app.gemini_client import (  # noqa: E402
     FLASH_MODEL_FALLBACKS,
+    gemini_labels_enabled,
     generate_json,
     has_gemini_auth,
     load_prompt_template,
@@ -118,7 +119,7 @@ def build_gemini_tiers(
         logger.info("Loading cached Gemini tiers from %s", output_path)
         return pl.read_parquet(output_path)
 
-    use_gemini = not skip_api and has_gemini_auth(settings)
+    use_gemini = not skip_api and gemini_labels_enabled(settings) and has_gemini_auth(settings)
     if skip_api:
         logger.info("skip_api=True — writing silver-tier labels only (no Gemini spend)")
     elif not use_gemini:

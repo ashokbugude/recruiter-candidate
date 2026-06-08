@@ -26,22 +26,13 @@ from app.feature_store import (  # noqa: E402
 )
 from app.features import FEATURE_NAMES  # noqa: E402
 from app.jd_requirements import load_or_build_jd_requirements  # noqa: E402
+from app.gemini_client import gemini_jd_enabled, gemini_labels_enabled  # noqa: E402
 from app.logging_setup import configure_logging  # noqa: E402
 from app.progress import format_duration  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 STEPS = ("jd", "features", "embeddings", "bm25", "labels", "all")
-
-
-def _skip_llm_calls(settings, artifacts_dir: Path, *, force_llm: bool = False) -> bool:
-    if force_llm:
-        return False
-    if settings.skip_gemini:
-        return True
-    if is_locked(artifacts_dir):
-        return True
-    return False
 
 
 def _candidate_total(candidates_path: Path, limit: int | None) -> int:
@@ -51,14 +42,16 @@ def _candidate_total(candidates_path: Path, limit: int | None) -> int:
 
 
 def run_jd(settings, artifacts_dir: Path, *, force: bool = False, force_llm: bool = False) -> None:
-    if _skip_llm_calls(settings, artifacts_dir, force_llm=force_llm) and settings.jd_requirements_path.exists():
-        logger.info("Skipping Gemini JD parse (locked/skip-llm) — using %s", settings.jd_requirements_path)
+    if settings.jd_requirements_path.exists() and not force:
+        logger.info("Using cached JD requirements at %s", settings.jd_requirements_path)
         return
+    if not gemini_jd_enabled(settings):
+        logger.info("Gemini JD parse disabled — building heuristic JD requirements")
     load_or_build_jd_requirements(
         settings.job_description_path,
         settings.jd_requirements_path,
         settings=settings,
-        force=force or force_llm,
+        force=force,
     )
 
 
@@ -168,12 +161,12 @@ def run_labels(
     if out_path.exists() and not force and not force_llm:
         logger.info("Gemini tiers exist at %s — skipping (use --force-llm to re-label)", out_path)
         return
-    if _skip_llm_calls(settings, artifacts_dir, force_llm=force_llm) and out_path.exists():
-        logger.info("Skipping Gemini labels (locked/skip-llm) — reusing %s", out_path)
-        return
 
     total = _candidate_total(candidates_path, limit)
-    logger.info("Gemini labels: %d candidates", total)
+    if gemini_labels_enabled(settings):
+        logger.info("Gemini archetype labels: %d candidates (API enabled)", total)
+    else:
+        logger.info("Silver-tier labels only: %d candidates (Gemini labels disabled)", total)
 
     jd = load_or_build_jd_requirements(
         settings.job_description_path,
@@ -187,7 +180,7 @@ def run_labels(
         jd=jd,
         limit=limit,
         force=force or force_llm,
-        skip_api=_skip_llm_calls(settings, artifacts_dir, force_llm=force_llm),
+        skip_api=not gemini_labels_enabled(settings) or (is_locked(artifacts_dir) and not force_llm),
     )
 
 
@@ -221,12 +214,24 @@ def main() -> int:
     parser.add_argument(
         "--skip-llm",
         action="store_true",
-        help="Never call Gemini (reuse cached JD/labels; no API spend).",
+        help="Disable all Gemini calls (same as --no-gemini-jd --no-gemini-labels).",
+    )
+    parser.add_argument(
+        "--gemini-jd",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable/disable Gemini Pro JD parse (default: from REDROB_GEMINI_JD_PARSE).",
+    )
+    parser.add_argument(
+        "--gemini-labels",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable/disable Gemini Flash 100K labels (default: from REDROB_GEMINI_LABELS).",
     )
     parser.add_argument(
         "--force-llm",
         action="store_true",
-        help="Re-run Gemini JD parse + archetype labels even when artifacts are locked.",
+        help="Re-run Gemini archetype labels even when gemini_tiers.parquet exists.",
     )
     parser.add_argument(
         "--device",
@@ -243,8 +248,15 @@ def main() -> int:
     args = parser.parse_args()
 
     settings = get_settings()
+    settings_updates: dict = {}
     if args.skip_llm:
-        settings = settings.model_copy(update={"skip_gemini": True})
+        settings_updates["skip_gemini"] = True
+    if args.gemini_jd is not None:
+        settings_updates["gemini_jd_parse"] = args.gemini_jd
+    if args.gemini_labels is not None:
+        settings_updates["gemini_labels"] = args.gemini_labels
+    if settings_updates:
+        settings = settings.model_copy(update=settings_updates)
     configure_logging(settings.log_level)
     settings.ensure_artifacts_dir()
     artifacts_dir = settings.artifacts_dir.resolve()
@@ -256,11 +268,12 @@ def main() -> int:
     if step == "all":
         total_candidates = _candidate_total(candidates_path, args.limit)
         logger.info(
-            "Preprocess pipeline: %d candidates | step=all | force=%s | force_llm=%s | skip_llm=%s",
+            "Preprocess pipeline: %d candidates | gemini_jd=%s | gemini_labels=%s | force=%s | force_llm=%s",
             total_candidates,
+            gemini_jd_enabled(settings),
+            gemini_labels_enabled(settings),
             args.force,
             args.force_llm,
-            args.skip_llm,
         )
         planned: list[tuple[str, Callable[[], None]]] = [
             ("JD parse", lambda: run_jd(settings, artifacts_dir, force=args.force, force_llm=args.force_llm)),

@@ -21,6 +21,7 @@ from app.constants import (
 )
 from app.gemini_client import (
     PRO_MODEL_FALLBACKS,
+    gemini_jd_enabled,
     generate_json,
     has_gemini_auth,
     load_prompt_template,
@@ -146,11 +147,14 @@ def load_or_build_jd_requirements(
         return JDRequirements.model_validate(json.loads(output_path.read_text(encoding="utf-8")))
 
     jd_text = jd_path.read_text(encoding="utf-8")
-    if has_gemini_auth(settings):
+    if gemini_jd_enabled(settings) and has_gemini_auth(settings):
         logger.info("Parsing JD with Gemini Pro")
         requirements = parse_jd_with_gemini(jd_text, settings=settings)
     else:
-        logger.warning("No Gemini credentials — using heuristic JD requirements")
+        if gemini_jd_enabled(settings) and not has_gemini_auth(settings):
+            logger.warning("Gemini JD parse enabled but no credentials — using heuristic JD")
+        else:
+            logger.info("Gemini JD parse disabled — using heuristic JD requirements")
         requirements = build_heuristic_requirements(jd_text)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

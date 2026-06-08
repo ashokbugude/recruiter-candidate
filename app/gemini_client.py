@@ -100,6 +100,20 @@ def _resolve_vertex_location(settings) -> str:
     )
 
 
+def gemini_jd_enabled(settings) -> bool:
+    """True when JD parse should call Gemini (vs heuristic)."""
+    if settings.skip_gemini:
+        return False
+    return bool(getattr(settings, "gemini_jd_parse", True))
+
+
+def gemini_labels_enabled(settings) -> bool:
+    """True when archetype labeling should call Gemini (vs silver fallback)."""
+    if settings.skip_gemini:
+        return False
+    return bool(getattr(settings, "gemini_labels", False))
+
+
 def has_gemini_auth(settings) -> bool:
     """True when an API key or Application Default Credentials are available."""
     if get_api_key(settings):

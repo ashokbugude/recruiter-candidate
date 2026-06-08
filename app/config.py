@@ -52,9 +52,17 @@ class Settings(BaseSettings):
     # Used when authenticating via ADC (OAuth / service account) → Vertex AI
     google_cloud_project: str | None = Field(default=None)
     google_cloud_location: str = Field(default="global")
+    gemini_jd_parse: bool = Field(
+        default=True,
+        description="Call Gemini Pro for JD parse when credentials are available.",
+    )
+    gemini_labels: bool = Field(
+        default=False,
+        description="Call Gemini Flash for 100K archetype labels (slow; off by default).",
+    )
     skip_gemini: bool = Field(
         default=False,
-        description="If true, never call Gemini during preprocess (use cached/heuristic artifacts).",
+        description="Master switch: if true, disables both gemini_jd_parse and gemini_labels.",
     )
 
     # Ranking blend weights (Stage 3 fusion)
