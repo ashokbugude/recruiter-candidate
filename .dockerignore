@@ -1,0 +1,20 @@
+# Docker build context — keep image lean; artifacts/ must be present locally.
+.git
+.github
+.venv
+venv
+venev
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+htmlcov
+.env
+credentials
+challenge/candidates.jsonl
+colab
+docs
+tests
+team_sarva_automata.csv
+*.md
+!hf-space/README.md

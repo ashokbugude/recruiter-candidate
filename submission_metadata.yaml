@@ -1,23 +1,26 @@
 # Redrob Hackathon — Submission Metadata (team Sarva Automata)
-# Replace primary_contact / team_members with real names before portal upload.
+# Portal upload: mirror these fields in the submission form.
 
 team_name: "Sarva Automata"
 
 primary_contact:
-  name: "Full Name"
-  email: "primary@example.com"
-  phone: "+91-XXXXXXXXXX"
+  name: "Arjun Mangarath"
+  email: "arjun00102@gmail.com"
+  phone: "+91-8139825799"
 
 team_members:
-  - name: "Member 1 Full Name"
-    email: "member1@example.com"
+  - name: "Arjun Mangarath"
+    email: "arjun00102@gmail.com"
+    role: "Team Lead"
+  - name: "Ashok Bugude"
+    email: "ashokbugude@gmail.com"
     role: "ML Engineer"
 
 github_repo: "https://github.com/ashokbugude/recruiter-candidate"
-# Replace with hosted URL after deploy, e.g.:
-#   HuggingFace Space: https://huggingface.co/spaces/<user>/redrob-ranker
-#   Docker Hub: docker pull <user>/redrob-ranker && docker run -p 7860:7860 <user>/redrob-ranker
-sandbox_link: "https://github.com/ashokbugude/recruiter-candidate#sandbox-docker"
+
+# Hosted sandbox: replace with HF Spaces or Docker Hub URL when published.
+# Interim: self-contained Docker per submission_spec §10.5 (README § Sandbox).
+sandbox_link: "https://github.com/ashokbugude/recruiter-candidate#sandbox-docker--fastapi"
 
 reproduce_command: "python rank.py --candidates ./challenge/candidates.jsonl --out ./team_sarva_automata.csv"
 
@@ -42,13 +45,13 @@ ai_usage_summary: |
   No candidate data sent to LLMs during ranking runtime.
 
 methodology_summary: |
-  Hybrid retrieval (BM25 + BGE dense + RRF) feeds a LightGBM LambdaRank
-  model trained on silver labels. Top-400 candidates are reranked with a
-  BGE cross-encoder; fusion weights tuned via Optuna on silver proxy NDCG.
-  Post-fusion modifiers penalize low availability, summary-template clones,
-  and research titles without production evidence. Behavioral redrob_signals
-  act as a multiplicative availability modifier with a hard cap in top-30.
-  Ranking is CPU-only with no network in under 5 minutes.
+  Hybrid recall (BM25 + BGE dense + career RRF) pulls ~2K candidates; LightGBM
+  LambdaRank scores with trap and behavioral penalties. Top-700 are reranked with
+  BGE cross-encoder; CE/LTR/RRF fusion plus post-fusion modifiers (availability
+  cap, template-clone limit, research-without-production) tuned via Optuna on
+  silver proxy NDCG. Local audit on team_sarva_automata.csv: proxy NDCG@10 1.0,
+  tier-5 in top 10/30/100 = 9/26/70, 0 honeypots in top-100. Embeddings and
+  indexes are built offline (~90 min); rank.py runs CPU-only with no network.
 
 declarations:
   read_submission_spec: true

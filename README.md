@@ -61,17 +61,35 @@ python scripts/compare_submissions.py old.csv new.csv
 
 Cross-encoder scoring uses fixed seeds (`torch.manual_seed(42)`, `np.random.seed(42)`) for tune vs live parity. Use `scripts/tune_modifiers.py` (not deprecated `tune_fusion.py`).
 
-## Sandbox (Docker / FastAPI)
+## Sandbox (Docker / FastAPI / Hugging Face)
 
 ```bash
-docker compose up --build
+docker build -t redrob-ranker .
+docker run -p 7860:7860 redrob-ranker
 # GET http://localhost:7860/health
 # GET http://localhost:7860/rank/sample
 ```
 
-Publish for portal: `docker build -t YOUR_USER/redrob-ranker . && docker push YOUR_USER/redrob-ranker`
+### Hugging Face Spaces (portal sandbox link)
 
-Local: `uvicorn app.main:app --host 0.0.0.0 --port 7860`
+HF Docker Spaces need the **full `artifacts/` tree** (not in main GitHub — gitignored). Package and push:
+
+```bash
+python scripts/package_hf_space.py --out ./dist/hf-space
+cd dist/hf-space
+git lfs install
+git init
+git remote add origin https://huggingface.co/spaces/<YOUR_USER>/redrob-ranker
+git add .
+git commit -m "HF Docker Space with offline artifacts"
+git push
+```
+
+- Use **CPU** hardware (16 GB RAM). Image is ~2–4 GB; first build ~20–40 min.
+- Space README template: `hf-space/README.md` (SDK docker, port 7860).
+- Cross-encoder weights are baked in `Dockerfile` at build time (no network at rank).
+
+Local without Docker: `uvicorn app.main:app --host 0.0.0.0 --port 7860`
 
 ## Clone in Google Colab
 
