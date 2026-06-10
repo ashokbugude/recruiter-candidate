@@ -1,0 +1,16 @@
+# Sandbox for organizers / reviewers
+# Usage: docker compose up --build
+# Then: GET http://localhost:7860/health
+#       GET http://localhost:7860/rank/sample
+#
+# Full 100K ranking requires mounting candidates.jsonl (optional):
+#   docker compose run -v ./challenge/candidates.jsonl:/app/challenge/candidates.jsonl:ro ranker ...
+
+services:
+  ranker:
+    build: .
+    ports:
+      - "7860:7860"
+    environment:
+      REDROB_ARTIFACTS_DIR: /app/artifacts
+      REDROB_CANDIDATES_PATH: /app/challenge/candidates.jsonl

@@ -18,7 +18,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.config import get_settings  # noqa: E402
 from app.logging_setup import configure_logging  # noqa: E402
-from app.ltr import BEST_PARAMS_NAME, LTR_MODEL_NAME, ltr_feature_columns, prepare_ltr_matrix  # noqa: E402
+from app.ltr import BEST_PARAMS_NAME, LTR_MODEL_NAME, prepare_ltr_training_data  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +33,7 @@ def train_ltr(
     if "silver_tier" not in frame.columns:
         raise ValueError("Feature parquet must include silver_tier column")
 
-    matrix, labels, _ids = prepare_ltr_matrix(frame)
-    group = [matrix.shape[0]]
+    matrix, labels, group, feature_names = prepare_ltr_training_data(frame)
 
     default_params = {
         "objective": "lambdarank",
@@ -61,7 +60,7 @@ def train_ltr(
         matrix,
         label=labels,
         group=group,
-        feature_name=ltr_feature_columns(),
+        feature_name=feature_names,
         free_raw_data=False,
     )
     booster = lgb.train(default_params, train_set, num_boost_round=num_round)

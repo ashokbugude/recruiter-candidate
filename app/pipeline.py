@@ -6,45 +6,23 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import polars as pl
-
+from app.artifact_names import MODIFIER_PARAMS
 from app.behavioral import behavioral_multiplier
+from app.career_recall import load_career_scores
 from app.config import Settings
+from app.fusion import fuse_scores
 from app.jd_requirements import JDRequirements, load_or_build_jd_requirements
 from app.ltr import load_ltr_model, score_candidates_by_id
+from app.modifier_params import load_modifier_params
+from app.rank_data import load_candidates_lookup, load_feature_lookup
+from app.ranking_core import rank_with_modifiers
+from app.ranking_modifiers import fusion_to_submission_scores
 from app.reasoning import build_reasoning
 from app.recall import hybrid_recall, normalize_scores
 from app.reranker import rerank_candidates
-from app.traps import should_hard_exclude, trap_penalty
+from app.traps import research_title_penalty, should_hard_exclude, trap_penalty
 
 logger = logging.getLogger(__name__)
-
-
-def load_feature_lookup(features_path: Path) -> dict[str, dict[str, Any]]:
-    frame = pl.read_parquet(features_path)
-    lookup: dict[str, dict[str, Any]] = {}
-    for row in frame.iter_rows(named=True):
-        lookup[str(row["candidate_id"])] = row
-    return lookup
-
-
-def load_candidates_lookup(candidates_path: Path) -> dict[str, dict[str, Any]]:
-    import json
-
-    lookup: dict[str, dict[str, Any]] = {}
-    with candidates_path.open(encoding="utf-8") as handle:
-        for line in handle:
-            line = line.strip()
-            if not line:
-                continue
-            candidate = json.loads(line)
-            lookup[str(candidate["candidate_id"])] = candidate
-    return lookup
-
-
-def assign_monotonic_scores(ranks: list[str]) -> dict[str, float]:
-    """Map ranks to monotonically decreasing scores (rank 1 → 0.99)."""
-    return {cid: max(0.01, 0.99 - (index * 0.008)) for index, cid in enumerate(ranks)}
 
 
 class RankingPipeline:
@@ -72,6 +50,8 @@ class RankingPipeline:
     ) -> list[dict[str, Any]]:
         top_k = top_k or self.settings.top_k_output
         jd, jd_text = self._load_jd()
+        modifier_params = load_modifier_params(self.artifacts_dir / MODIFIER_PARAMS)
+        career_scores = load_career_scores(str(self.artifacts_dir))
         feature_lookup = load_feature_lookup(self.features_path)
         candidate_lookup = load_candidates_lookup(candidates_path)
 
@@ -83,10 +63,11 @@ class RankingPipeline:
             dense_k=self.settings.dense_recall_k,
             pool_size=self.settings.recall_pool_size,
             rrf_k=self.settings.rrf_k,
+            career_rrf_weight=self.settings.career_rrf_weight,
         )
         rrf_scores = dict(recall_pool)
 
-        pool_ids = [cid for cid, _ in recall_pool if cid in feature_lookup]
+        pool_ids = [cid for cid, _ in recall_pool if cid in feature_lookup and cid in candidate_lookup]
         pool_ids = [cid for cid in pool_ids if not should_hard_exclude(feature_lookup[cid])]
 
         model = load_ltr_model(self.ltr_path)
@@ -97,7 +78,7 @@ class RankingPipeline:
             row = feature_lookup[cid]
             candidate = candidate_lookup.get(cid, {})
             base = float(ltr_raw.get(cid, 0.0))
-            penalty = trap_penalty(row)
+            penalty = trap_penalty(row) + research_title_penalty(row, candidate)
             behavior = behavioral_multiplier(candidate, reference_date=self.settings.reference_date)
             stage2[cid] = (base - penalty) * behavior
 
@@ -110,16 +91,42 @@ class RankingPipeline:
         ltr_norm = normalize_scores({cid: stage2.get(cid, 0.0) for cid in rerank_ids})
         rrf_norm = normalize_scores({cid: rrf_scores.get(cid, 0.0) for cid in rerank_ids})
 
-        final: dict[str, float] = {}
-        for cid in rerank_ids:
-            final[cid] = (
-                self.settings.rerank_ce_weight * ce_norm.get(cid, 0.0)
-                + self.settings.rerank_ltr_weight * ltr_norm.get(cid, 0.0)
-                + self.settings.rerank_rrf_weight * rrf_norm.get(cid, 0.0)
-            )
+        final = fuse_scores(
+            rerank_ids,
+            ce_norm=ce_norm,
+            ltr_norm=ltr_norm,
+            rrf_norm=rrf_norm,
+            ce_weight=self.settings.rerank_ce_weight,
+            ltr_weight=self.settings.rerank_ltr_weight,
+            rrf_weight=self.settings.rerank_rrf_weight,
+        )
 
-        ranked_ids = sorted(final, key=lambda cid: (-final[cid], cid))[:top_k]
-        score_map = assign_monotonic_scores(ranked_ids)
+        ranked_ids = rank_with_modifiers(
+            rerank_ids,
+            final,
+            jd=jd,
+            candidate_lookup=candidate_lookup,
+            feature_lookup=feature_lookup,
+            modifier_params=modifier_params,
+            career_scores=career_scores,
+            reference_date=self.settings.reference_date,
+            top_k=top_k,
+        )
+
+        # Recompute adjusted scores for submission score mapping
+        from app.ranking_core import apply_modifiers_to_scores
+
+        adjusted = apply_modifiers_to_scores(
+            final,
+            rerank_ids,
+            jd=jd,
+            candidate_lookup=candidate_lookup,
+            feature_lookup=feature_lookup,
+            modifier_params=modifier_params,
+            career_scores=career_scores,
+            reference_date=self.settings.reference_date,
+        )
+        score_map = fusion_to_submission_scores(ranked_ids, adjusted)
 
         results: list[dict[str, Any]] = []
         for rank_index, cid in enumerate(ranked_ids, start=1):
@@ -128,8 +135,8 @@ class RankingPipeline:
                 {
                     "candidate_id": cid,
                     "rank": rank_index,
-                    "score": round(score_map[cid], 4),
-                    "reasoning": build_reasoning(candidate, rank=rank_index),
+                    "score": score_map.get(cid, round(0.99 - (rank_index - 1) * 0.008, 4)),
+                    "reasoning": build_reasoning(candidate, rank=rank_index, jd=jd),
                 }
             )
         logger.info("Ranked top %d candidates from pool=%d rerank=%d", len(results), len(pool_ids), len(rerank_ids))

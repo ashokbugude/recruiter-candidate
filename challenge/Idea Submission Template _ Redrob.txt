@@ -1,38 +1,60 @@
-Team Name :
-Problem Statement :
-Team Leader Name :
+Team Name : Sarva Automata
+Problem Statement : Rank 100K candidates for a Senior AI Engineer (search/retrieval/ranking) role with NDCG@10 as primary metric, CPU-only runtime, and honeypot-aware quality.
+Team Leader Name : [Fill before upload]
 
 Solution Overview
 What is your proposed solution?
+Hybrid recall (BM25 + BGE dense + RRF) → LightGBM LambdaRank on 45 hand-crafted features → BGE cross-encoder rerank on top-600, with tuned fusion weights. Post-fusion modifiers separate behavioral twins (availability, template clones) and down-rank research-only profiles.
+
 What differentiates your approach from traditional candidate matching systems?
+We combine IR-style retrieval with learned ranking and behavioral Redrob signals as first-class multipliers—not keyword stuffing. Trap/honeypot rules and availability caps address dataset adversarial profiles explicitly called out in the challenge README.
 
 JD Understanding & Candidate Evaluation
 What are the key requirements extracted from the JD?
+5–8 YOE production ML; search/retrieval/ranking systems; embeddings + vector search; India hubs (Pune/Noida/Bangalore); product engineering over pure research; recruiter reachability (response rate, notice).
+
 Which candidate signals are most important for determining relevance? / How does your solution evaluate candidate fit beyond keyword matching?
+Silver-tier labels + LTR features cover skills, career evidence, GitHub activity, and trap flags. Behavioral signals (response rate, recency, notice) break ties among template-clone summaries. Cross-encoder scores semantic fit to JD without runtime LLM calls.
 
 Ranking Methodology
 How does your system retrieve, score, and rank candidates?
+BM25 and dense BGE retrieve ~2K; LTR scores with trap/behavior penalties; top-600 fused with cross-encoder; availability cap in top-30; export top-100 with fused-derived scores.
+
 What models, algorithms, or heuristics are used?
+BM25, FAISS, LightGBM LambdaRank, BGE-reranker-base, 12 honeypot heuristics, Optuna fusion tuning on silver proxy NDCG.
+
 How are multiple candidate signals combined into a final ranking?
+Weighted fusion (CE/LTR/RRF) × behavioral multiplier × post-fusion penalties for low availability, summary clones, and research titles without production evidence.
 
 Explainability & Data Validation
 How are ranking decisions explained?
+Five rank-band reasoning templates cite YOE, skills, location, availability, production vs research, and eval metrics (NDCG/MAP) from whitelisted fields only.
+
 How do you prevent hallucinations or unsupported justifications?
+No LLM at rank time; reasoning built from structured profile/signals with explicit gap flags (notice, GitHub, availability).
+
 How does your solution handle inconsistent, low-quality, or suspicious profiles?
+Hard-exclude honeypots; subtractive trap penalties; steep availability down-rank; template-clone detection; research-title penalty without production keywords.
 
 End-to-End Workflow
 What is the complete workflow from JD input to ranked candidate output?
+Preprocess: features + embeddings + silver labels + LTR train (offline). Rank: load artifacts → hybrid recall → LTR → CE rerank → fusion + modifiers → CSV + audit.
 
 System Architecture
+Offline: preprocess.py, train_ltr.py, tune_fusion.py. Online: rank.py / FastAPI sandbox. Artifacts: parquet features, FAISS, BM25, ltr_model.lgb, fusion_params.json.
 
 Results & Performance
 What results or insights demonstrate ranking quality?
+Silver proxy NDCG@10 ~0.91 after fusion tuning; 8 tier-5 in top-10; 64 tier-5 in top-100; 0 honeypots in top-100; 0 low-availability in top-30 after cap.
+
 How does your solution meet the challenge's runtime and compute constraints?
+Precomputed embeddings/index; rank ~5–8 min CPU, 16GB RAM, no network at inference.
 
 Technologies Used
-What technologies, frameworks, and tools were used and why were they
-selected for this solution?
+What technologies, frameworks, and tools were used and why were they selected for this solution?
+Python, Polars, LightGBM, sentence-transformers, FAISS, rank-bm25, FastAPI, Gemini (offline JD/labels only), Cursor for engineering.
 
 Submission Assets
-Github video etc
-
+Github: https://github.com/ashokbugude/recruiter-candidate
+Sandbox: docker build -t redrob-ranker . && docker run -p 7860:7860 redrob-ranker → GET /health, POST /rank/sample
+Reproduce: python rank.py --candidates ./challenge/candidates.jsonl --out ./submission.csv

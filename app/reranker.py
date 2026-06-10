@@ -6,7 +6,18 @@ import logging
 from functools import lru_cache
 from typing import Any
 
+import numpy as np
+
 logger = logging.getLogger(__name__)
+
+# Deterministic CE scoring for tune vs live parity (see README).
+np.random.seed(42)
+try:
+    import torch
+
+    torch.manual_seed(42)
+except ImportError:
+    pass
 
 RERANKER_MODEL_NAME = "BAAI/bge-reranker-base"
 

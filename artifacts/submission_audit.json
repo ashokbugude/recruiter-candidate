@@ -1,0 +1,36 @@
+{
+  "submission": "C:\\Users\\ashok\\Documents\\Hackathon\\IndiaRuns\\recruiter-candidate\\team_sarva_automata.csv",
+  "rows": 100,
+  "tier5_in_top_10": 9,
+  "tier5_in_top_30": 26,
+  "tier5_in_top_100": 70,
+  "tier5_pool_total": 127,
+  "honeypots_in_top_10": 0,
+  "honeypots_in_top_100": 0,
+  "honeypot_dq_risk": false,
+  "template_clones_top_30": 8,
+  "low_availability_top_30": 0,
+  "research_titles_top_100": 15,
+  "proxy_ndcg_at_10": 1.0,
+  "ndcg_at_30": 0.9922,
+  "top10_fingerprint": {
+    "CAND_0061257": 1,
+    "CAND_0002025": 2,
+    "CAND_0005538": 3,
+    "CAND_0018499": 4,
+    "CAND_0006567": 5,
+    "CAND_0077337": 6,
+    "CAND_0046064": 7,
+    "CAND_0093193": 8,
+    "CAND_0071974": 9,
+    "CAND_0046525": 10
+  },
+  "sample_tier5_in_top_10": 4,
+  "targets_met": {
+    "tier5_top10_gte_6": true,
+    "tier5_in_top_30_target_gte_24": true,
+    "tier5_top100_gte_40": true,
+    "honeypots_top100_lte_10": true,
+    "low_avail_top30_lte_2": true
+  }
+}

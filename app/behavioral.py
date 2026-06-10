@@ -19,7 +19,13 @@ def behavioral_multiplier(
 
     multiplier = 1.0
     multiplier *= 0.70 + 0.30 * float(signals.get("open_to_work_flag", False))
-    multiplier *= 0.55 + 0.45 * float(signals.get("recruiter_response_rate") or 0)
+    rr = float(signals.get("recruiter_response_rate") or 0)
+    if rr < 0.15:
+        multiplier *= 0.40
+    elif rr < 0.25:
+        multiplier *= 0.60
+    else:
+        multiplier *= 0.55 + 0.45 * rr
     multiplier *= _recency_decay(signals.get("last_active_date"), ref)
     saved = min(1.0, int(signals.get("saved_by_recruiters_30d") or 0) / 8)
     multiplier *= 0.80 + 0.20 * saved
@@ -39,7 +45,7 @@ def behavioral_multiplier(
     else:
         multiplier *= 0.65
 
-    return max(0.55, min(1.15, multiplier))
+    return max(0.35, min(1.15, multiplier))
 
 
 def _recency_decay(value: Any, ref: date) -> float:

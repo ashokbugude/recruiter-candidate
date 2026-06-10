@@ -33,13 +33,26 @@ from app.progress import format_duration  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-STEPS = ("jd", "features", "embeddings", "bm25", "labels", "all")
+STEPS = ("jd", "features", "embeddings", "bm25", "labels", "career_recall", "all")
 
 
 def _candidate_total(candidates_path: Path, limit: int | None) -> int:
     if limit is not None:
         return limit
     return count_candidates(candidates_path)
+
+
+def _run_career_recall(settings, candidates_path: Path, artifacts_dir: Path) -> None:
+    from scripts.build_career_recall_scores import build_scores, TOP_K, MIN_SCORE
+    import json
+
+    from app.artifact_names import CAREER_SCORES
+
+    out_path = artifacts_dir / CAREER_SCORES
+    scores = build_scores(candidates_path, settings=settings)
+    payload = {"scores": scores, "top_k": TOP_K, "min_score": MIN_SCORE}
+    out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    logger.info("Wrote %d career recall scores to %s", len(scores), out_path)
 
 
 def _features_stale(settings) -> bool:
@@ -379,6 +392,11 @@ def main() -> int:
         _run_named_step(
             "BM25 index",
             lambda: run_bm25(settings, candidates_path, limit=args.limit, force=args.force),
+        )
+    elif step == "career_recall":
+        _run_named_step(
+            "Career recall scores",
+            lambda: _run_career_recall(settings, candidates_path, artifacts_dir),
         )
 
     logger.info("Preprocessing step '%s' complete (elapsed %s).", step, format_duration(time.perf_counter() - pipeline_t0))

@@ -122,6 +122,30 @@ JD_PREFERRED_CITIES: Final[frozenset[str]] = frozenset(
     {"pune", "noida", "delhi", "gurgaon", "gurugram", "mumbai", "hyderabad", "bangalore", "bengaluru"}
 )
 
+JD_PRIMARY_HUBS: Final[frozenset[str]] = frozenset({"pune", "noida"})
+
+JD_SECONDARY_HUBS: Final[frozenset[str]] = frozenset(
+    {"bangalore", "bengaluru", "gurgaon", "gurugram", "delhi"}
+)
+
+# Display order for reasoning (JD emphasizes Pune/Noida first).
+JD_HUB_DISPLAY: Final[str] = "Pune/Noida/Bangalore/Delhi-Gurgaon"
+
+CV_SPEECH_SKILL_MARKERS: Final[tuple[str, ...]] = (
+    "yolo",
+    "asr",
+    "speech recognition",
+    "speech",
+    "computer vision",
+    "opencv",
+    "image classification",
+    "whisper",
+    "tts",
+    "text-to-speech",
+    "audio",
+    "object detection",
+)
+
 JD_PREFERRED_COUNTRY: Final[str] = "India"
 
 SENIOR_AI_TITLE_KEYWORDS: Final[tuple[str, ...]] = (

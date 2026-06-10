@@ -1,4 +1,4 @@
-"""Hybrid recall — BM25 + dense FAISS fused with RRF."""
+"""Hybrid recall — BM25 + dense FAISS + career RRF."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from app.bm25_index import load_bm25, search_bm25
+from app.career_recall import career_recall_ranking
 from app.embeddings import encode_text, load_embedding_index, search_faiss
 from app.jd_requirements import JDRequirements
 
@@ -40,6 +41,21 @@ def reciprocal_rank_fusion(
     return scores
 
 
+def reciprocal_rank_fusion_weighted(
+    lists: list[tuple[list[str], float]],
+    *,
+    k: int = 60,
+) -> dict[str, float]:
+    """Fuse ranked lists with per-list weights."""
+    scores: dict[str, float] = {}
+    for ranking, weight in lists:
+        if weight <= 0 or not ranking:
+            continue
+        for rank, candidate_id in enumerate(ranking, start=1):
+            scores[candidate_id] = scores.get(candidate_id, 0.0) + weight * (1.0 / (k + rank))
+    return scores
+
+
 def hybrid_recall(
     jd: JDRequirements,
     jd_text: str,
@@ -49,6 +65,7 @@ def hybrid_recall(
     dense_k: int = 3000,
     pool_size: int = 2000,
     rrf_k: int = 60,
+    career_rrf_weight: float = 0.65,
 ) -> list[tuple[str, float]]:
     """Return top recall pool as (candidate_id, rrf_score) pairs."""
     query_text = build_jd_query_text(jd, jd_text)
@@ -62,12 +79,21 @@ def hybrid_recall(
     dense_hits = search_faiss(index, ids, query_vec, top_k=dense_k)
     dense_ranking = [cid for cid, _ in dense_hits]
 
-    fused = reciprocal_rank_fusion([bm25_ranking, dense_ranking], k=rrf_k)
+    career_ranking = career_recall_ranking(artifacts_dir)
+    weighted_lists: list[tuple[list[str], float]] = [
+        (bm25_ranking, 1.0),
+        (dense_ranking, 1.0),
+    ]
+    if career_ranking:
+        weighted_lists.append((career_ranking, career_rrf_weight))
+
+    fused = reciprocal_rank_fusion_weighted(weighted_lists, k=rrf_k)
     ranked = sorted(fused.items(), key=lambda item: (-item[1], item[0]))[:pool_size]
     logger.info(
-        "Hybrid recall: bm25=%d dense=%d fused=%d pool=%d",
+        "Hybrid recall: bm25=%d dense=%d career=%d fused=%d pool=%d",
         len(bm25_ranking),
         len(dense_ranking),
+        len(career_ranking),
         len(fused),
         len(ranked),
     )

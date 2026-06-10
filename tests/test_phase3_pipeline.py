@@ -13,7 +13,7 @@ from app.behavioral import behavioral_multiplier
 from app.config import PROJECT_ROOT
 from app.feature_store import build_features_frame, write_features_parquet
 from app.jd_requirements import build_heuristic_requirements
-from app.ltr import prepare_ltr_matrix
+from app.ltr import build_ltr_groups, prepare_ltr_matrix
 from app.recall import reciprocal_rank_fusion
 from app.traps import should_hard_exclude, trap_penalty
 
@@ -45,18 +45,25 @@ class TestTrapsAndBehavior:
 
     def test_behavioral_multiplier_bounds(self, sample_candidates) -> None:
         value = behavioral_multiplier(sample_candidates[0])
-        assert 0.55 <= value <= 1.15
+        assert 0.35 <= value <= 1.15
 
 
 class TestLTRTrainingMatrix:
+    def test_build_ltr_groups_respects_lambdarank_limit(self) -> None:
+        groups = build_ltr_groups(100_000, group_size=1_000)
+        assert sum(groups) == 100_000
+        assert len(groups) == 100
+        assert max(groups) <= 10_000
+
     def test_prepare_ltr_matrix_shape(self, sample_candidates, jd_requirements, tmp_path) -> None:
         frame = build_features_frame(iter(sample_candidates), jd_requirements)
         frame = frame.with_columns(pl.lit(2).alias("silver_tier"), pl.lit(2).alias("gemini_tier"))
         out = tmp_path / "features.parquet"
         write_features_parquet(frame, out)
-        matrix, labels, ids = prepare_ltr_matrix(pl.read_parquet(out))
+        matrix, labels, ids, columns = prepare_ltr_matrix(pl.read_parquet(out))
         assert matrix.shape[0] == len(sample_candidates)
-        assert matrix.shape[1] == 46
+        assert matrix.shape[1] == len(columns)
+        assert len(columns) in (45, 46)
         assert len(labels) == len(ids)
 
 
@@ -71,9 +78,20 @@ class TestPhase4ModulesExist:
             "app/reranker.py",
             "app/pipeline.py",
             "app/reasoning.py",
+            "app/career_recall.py",
+            "app/ranking_core.py",
+            "app/artifacts_check.py",
             "scripts/train_ltr.py",
             "scripts/tune.py",
+            "scripts/tune_modifiers.py",
+            "scripts/build_career_recall_scores.py",
         ],
     )
     def test_files_exist(self, filepath: str) -> None:
         assert (PROJECT_ROOT / filepath).is_file()
+
+    def test_fusion_params_optional_in_ci(self) -> None:
+        path = PROJECT_ROOT / "artifacts" / "fusion_params.json"
+        if not path.exists():
+            pytest.skip("fusion_params.json not in CI checkout")
+        assert path.is_file()

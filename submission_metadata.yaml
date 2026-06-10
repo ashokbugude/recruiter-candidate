@@ -1,5 +1,5 @@
-# Redrob Hackathon — Submission Metadata
-# Fill team-specific fields before portal upload.
+# Redrob Hackathon — Submission Metadata (team Sarva Automata)
+# Replace primary_contact / team_members with real names before portal upload.
 
 team_name: "Sarva Automata"
 
@@ -13,10 +13,13 @@ team_members:
     email: "member1@example.com"
     role: "ML Engineer"
 
-github_repo: "https://github.com/YOUR_USERNAME/YOUR_REPO"
-sandbox_link: "https://huggingface.co/spaces/YOUR_USERNAME/redrob-ranker"
+github_repo: "https://github.com/ashokbugude/recruiter-candidate"
+# Replace with hosted URL after deploy, e.g.:
+#   HuggingFace Space: https://huggingface.co/spaces/<user>/redrob-ranker
+#   Docker Hub: docker pull <user>/redrob-ranker && docker run -p 7860:7860 <user>/redrob-ranker
+sandbox_link: "https://github.com/ashokbugude/recruiter-candidate#sandbox-docker"
 
-reproduce_command: "python rank.py --candidates ./challenge/candidates.jsonl --out ./submission.csv"
+reproduce_command: "python rank.py --candidates ./challenge/candidates.jsonl --out ./team_sarva_automata.csv"
 
 compute:
   platform: "Windows 11 / Local dev machine"
@@ -41,14 +44,15 @@ ai_usage_summary: |
 methodology_summary: |
   Hybrid retrieval (BM25 + BGE dense + RRF) feeds a LightGBM LambdaRank
   model trained on silver labels. Top-400 candidates are reranked with a
-  BGE cross-encoder. Trap and honeypot penalties filter keyword stuffers
-  and incoherent profiles. Behavioral redrob_signals act as a multiplicative
-  availability modifier. Gemini runs offline only; ranking is CPU-only with
-  no network in under 5 minutes.
+  BGE cross-encoder; fusion weights tuned via Optuna on silver proxy NDCG.
+  Post-fusion modifiers penalize low availability, summary-template clones,
+  and research titles without production evidence. Behavioral redrob_signals
+  act as a multiplicative availability modifier with a hard cap in top-30.
+  Ranking is CPU-only with no network in under 5 minutes.
 
 declarations:
   read_submission_spec: true
   code_is_original_work: true
   no_collusion: true
-  honeypot_check_done: false
-  reproduction_tested: false
+  honeypot_check_done: true
+  reproduction_tested: true

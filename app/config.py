@@ -41,13 +41,21 @@ class Settings(BaseSettings):
     top_k_output: int = Field(default=100, ge=1, le=100)
     recall_pool_size: int = Field(default=2000, ge=100)
     rerank_pool_size: int = Field(default=400, ge=10)
+    top_availability_cap: int = Field(
+        default=30,
+        ge=1,
+        le=100,
+        description="Ranks 1..N must prefer high-availability candidates when possible.",
+    )
 
     # Logging
     log_level: str = Field(default="INFO")
 
     # Offline LLM (preprocessing only)
     gemini_api_key: str | None = Field(default=None)
-    gemini_flash_model: str = Field(default="gemini-3.5-flash")
+    gemini_flash_model: str = Field(default="gemini-2.5-flash")
+    gemini_label_batch_size: int = Field(default=50, ge=1, le=200)
+    gemini_label_sleep_seconds: float = Field(default=0.2, ge=0.0, le=10.0)
     gemini_pro_model: str = Field(default="gemini-2.5-pro")
     # Used when authenticating via ADC (OAuth / service account) → Vertex AI
     google_cloud_project: str | None = Field(default=None)
@@ -70,6 +78,7 @@ class Settings(BaseSettings):
     rerank_ltr_weight: float = Field(default=0.30, ge=0.0, le=1.0)
     rerank_rrf_weight: float = Field(default=0.15, ge=0.0, le=1.0)
     rrf_k: int = Field(default=60, ge=1)
+    career_rrf_weight: float = Field(default=0.65, ge=0.0, le=1.0)
     bm25_recall_k: int = Field(default=3000, ge=100)
     dense_recall_k: int = Field(default=3000, ge=100)
 

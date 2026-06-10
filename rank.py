@@ -3,7 +3,7 @@
 Redrob candidate ranker — CLI entry point.
 
 Reproduce command (submission spec §10.3):
-    python rank.py --candidates ./challenge/candidates.jsonl --out ./submission.csv
+    python rank.py --candidates ./challenge/candidates.jsonl --out ./team_sarva_automata.csv
 """
 
 from __future__ import annotations
@@ -13,7 +13,8 @@ import csv
 import logging
 from pathlib import Path
 
-from app.config import get_settings
+from app.artifacts_check import ArtifactValidationError, validate_artifacts
+from app.config import PROJECT_ROOT, get_settings
 from app.logging_setup import configure_logging
 
 logger = logging.getLogger(__name__)
@@ -33,8 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--out",
         type=Path,
-        required=True,
-        help="Output submission CSV path.",
+        default=PROJECT_ROOT / "team_sarva_automata.csv",
+        help="Portal submission CSV (use your registered team_xxx.csv name).",
     )
     parser.add_argument(
         "--artifacts",
@@ -58,26 +59,6 @@ def validate_candidates_file(path: Path) -> None:
         raise ValueError(f"Candidates file is empty: {path}")
 
 
-def validate_artifacts(artifacts_dir: Path) -> None:
-    required = [
-        "job_description.txt",
-        "jd_requirements.json",
-        "candidate_features.parquet",
-        "bm25.pkl",
-        "faiss.index",
-        "bge_embeddings.npy",
-        "candidate_id_index.json",
-        "ltr_model.lgb",
-    ]
-    missing = [name for name in required if not (artifacts_dir / name).exists()]
-    if missing:
-        raise FileNotFoundError(
-            "Missing artifacts: "
-            + ", ".join(missing)
-            + ". Run: python scripts/preprocess.py && python scripts/train_ltr.py"
-        )
-
-
 def write_submission(rows: list[dict], output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8", newline="") as handle:
@@ -98,17 +79,33 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         validate_candidates_file(args.candidates.resolve())
-        validate_artifacts(artifacts_dir)
-    except (FileNotFoundError, ValueError) as exc:
+        warnings = validate_artifacts(artifacts_dir)
+        for msg in warnings:
+            logger.warning("%s", msg)
+    except (FileNotFoundError, ValueError, ArtifactValidationError) as exc:
         logger.error("%s", exc)
         return 1
 
+    from app.fusion import settings_with_fusion_params
     from app.pipeline import RankingPipeline
 
+    settings = settings_with_fusion_params(settings, artifacts_dir)
     pipeline = RankingPipeline(settings, artifacts_dir)
-    results = pipeline.rank(args.candidates.resolve())
-    write_submission(results, args.out.resolve())
-    logger.info("Wrote submission CSV: %s (%d rows)", args.out, len(results))
+    candidates_path = args.candidates.resolve()
+    results = pipeline.rank(candidates_path)
+    out_path = args.out.resolve()
+    write_submission(results, out_path)
+    logger.info("Wrote submission CSV: %s (%d rows)", out_path, len(results))
+
+    from app.fusion import update_live_metrics
+
+    ranked_ids = [row["candidate_id"] for row in results]
+    update_live_metrics(
+        artifacts_dir,
+        ranked_ids,
+        candidates_path,
+        reference_date=settings.reference_date,
+    )
     return 0
 
 

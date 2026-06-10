@@ -32,8 +32,12 @@ from app.progress import ProgressTracker, format_duration  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-BATCH_SIZE = 20
-SLEEP_SECONDS = 1.0
+def _batch_size(settings) -> int:
+    return int(getattr(settings, "gemini_label_batch_size", 50))
+
+
+def _sleep_seconds(settings) -> float:
+    return float(getattr(settings, "gemini_label_sleep_seconds", 0.2))
 
 
 def _compact_candidate(candidate: dict) -> dict:
@@ -136,7 +140,9 @@ def build_gemini_tiers(
     batch: list[dict] = []
     candidates = load_candidates_list(candidates_path, limit=limit) if limit else list(load_candidates(candidates_path))
     total_candidates = len(candidates)
-    total_batches = (total_candidates + BATCH_SIZE - 1) // BATCH_SIZE if use_gemini else 0
+    batch_size = _batch_size(settings)
+    sleep_seconds = _sleep_seconds(settings)
+    total_batches = (total_candidates + batch_size - 1) // batch_size if use_gemini else 0
 
     if use_gemini:
         model = resolve_flash_model(settings)
@@ -144,7 +150,7 @@ def build_gemini_tiers(
             "Gemini labeling: %d candidates in %d batches (batch_size=%d, model=%s)",
             total_candidates,
             total_batches,
-            BATCH_SIZE,
+            batch_size,
             model,
         )
         batch_progress = ProgressTracker(
@@ -165,11 +171,11 @@ def build_gemini_tiers(
             batch_progress.tick()
             logger.debug("Batch API call took %s", format_duration(time.perf_counter() - t0))
             batch = []
-            time.sleep(SLEEP_SECONDS)
+            time.sleep(sleep_seconds)
 
         for candidate in candidates:
             batch.append(candidate)
-            if len(batch) >= BATCH_SIZE:
+            if len(batch) >= batch_size:
                 flush_batch()
 
         flush_batch()

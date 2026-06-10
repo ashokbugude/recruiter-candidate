@@ -26,7 +26,14 @@ TRACKED_ARTIFACTS: tuple[str, ...] = (
     "candidate_id_index.json",
     "bm25.pkl",
     "ltr_model.lgb",
+    "fusion_params.json",
+    "modifier_params.json",
+    "career_recall_scores.json",
+    "tuning_report_modifiers.json",
 )
+
+# Present in manifest when available; not required to lock preprocess artifacts.
+LOCK_OPTIONAL_ARTIFACTS: frozenset[str] = frozenset({"tuning_report_modifiers.json"})
 
 
 def manifest_path(artifacts_dir: Path) -> Path:
@@ -60,10 +67,17 @@ def is_locked(artifacts_dir: Path) -> bool:
     return bool(manifest and manifest.get("locked"))
 
 
-def missing_artifacts(artifacts_dir: Path, *, include_ltr: bool = False) -> list[str]:
+def missing_artifacts(
+    artifacts_dir: Path,
+    *,
+    include_ltr: bool = False,
+    for_lock: bool = False,
+) -> list[str]:
     names = list(TRACKED_ARTIFACTS)
     if not include_ltr:
         names = [n for n in names if n != "ltr_model.lgb"]
+    if for_lock:
+        names = [n for n in names if n not in LOCK_OPTIONAL_ARTIFACTS]
     return [name for name in names if not (artifacts_dir / name).exists()]
 
 
@@ -103,7 +117,7 @@ def write_manifest(artifacts_dir: Path, *, locked: bool = False) -> dict[str, An
 
 
 def assert_ready_for_preprocess_lock(artifacts_dir: Path) -> None:
-    missing = missing_artifacts(artifacts_dir, include_ltr=False)
+    missing = missing_artifacts(artifacts_dir, include_ltr=False, for_lock=True)
     if missing:
         raise FileNotFoundError(
             "Cannot lock artifacts — missing: "

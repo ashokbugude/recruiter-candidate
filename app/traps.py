@@ -4,6 +4,19 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.ranking_modifiers import has_production_evidence, is_research_title
+
+
+def research_title_penalty(row: dict[str, Any], candidate: dict[str, Any] | None = None) -> float:
+    """Penalize pure research titles without production evidence (JD anti-research stance)."""
+    if candidate and is_research_title(candidate) and not has_production_evidence(candidate):
+        return 2.5
+    if float(row.get("trap_title_flag") or 0.0) >= 1.0 and not (
+        candidate and has_production_evidence(candidate)
+    ):
+        return 1.0
+    return 0.0
+
 
 def trap_penalty(row: dict[str, Any]) -> float:
     """Subtractive penalty from precomputed feature / metadata row."""
