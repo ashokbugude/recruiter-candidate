@@ -4,3 +4,4 @@ artifacts/faiss.index filter=lfs diff=lfs merge=lfs -text
 artifacts/*.pkl filter=lfs diff=lfs merge=lfs -text
 artifacts/*.parquet filter=lfs diff=lfs merge=lfs -text
 artifacts/ltr_model.lgb filter=lfs diff=lfs merge=lfs -text
+challenge/candidates.jsonl filter=lfs diff=lfs merge=lfs -text

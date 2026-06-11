@@ -113,6 +113,14 @@ def test_fusion_to_submission_scores_collapsed_spread_uses_nudge() -> None:
     assert len({scores[c] for c in ids}) == 3
 
 
+def test_fusion_to_submission_scores_never_exceed_one() -> None:
+    ids = [f"c{i}" for i in range(24)]
+    fused = {cid: float(i) for i, cid in enumerate(ids)}
+    scores = fusion_to_submission_scores(ids, fused)
+    assert all(score <= 0.9999 for score in scores.values())
+    assert scores[ids[0]] > scores[ids[-1]]
+
+
 def test_research_with_prod_less_punitive_than_no_prod() -> None:
     jd = build_heuristic_requirements(
         (PROJECT_ROOT / "artifacts" / "job_description.txt").read_text(encoding="utf-8")

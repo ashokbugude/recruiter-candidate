@@ -48,6 +48,21 @@ python challenge/validate_submission.py team_sarva_automata.csv
 
 Requires `artifacts/`: features, BM25, FAISS embeddings, `ltr_model.lgb` (built by preprocess + train).
 
+### Track 1 portal checklist (Sarva Automata)
+
+| Deliverable | File / link |
+|-------------|-------------|
+| Ranked output (100 rows) | `team_sarva_automata.csv` |
+| GitHub repository | https://github.com/ashokbugude/recruiter-candidate |
+| Methodology document (PDF) | Export `challenge/Idea Submission Template _ Redrob.pptx` or use [docs/METHODOLOGY.md](docs/METHODOLOGY.md) |
+| Sandbox (submission_spec §10.5) | https://huggingface.co/spaces/ashokbugude/redrob-ranker |
+| Portal metadata | `submission_metadata.yaml` |
+
+```bash
+python scripts/build_methodology_deck.py
+# PowerPoint: Save As -> PDF -> docs/Sarva_Automata_Methodology.pdf
+```
+
 ## Pre-upload verification
 
 ```bash
@@ -66,8 +81,8 @@ Cross-encoder scoring uses fixed seeds (`torch.manual_seed(42)`, `np.random.seed
 ```bash
 docker build -t redrob-ranker .
 docker run -p 7860:7860 redrob-ranker
+# Open http://localhost:7860/ — upload JSONL or JSON array (≤100 candidates) → ranked CSV
 # GET http://localhost:7860/health
-# GET http://localhost:7860/rank/sample
 ```
 
 ### Hugging Face Spaces (portal sandbox link)
@@ -121,6 +136,9 @@ rank.py        submission CLI
 
 ## Docs
 
+- [docs/SUBMISSION.md](docs/SUBMISSION.md) — **portal upload checklist**
+- [docs/METHODOLOGY.md](docs/METHODOLOGY.md) — methodology document (source)
+- [docs/Sarva_Automata_Methodology.pdf](docs/Sarva_Automata_Methodology.pdf) — methodology PDF for portal
 - [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) — build phases
 - [docs/TECHNICAL_PLAN.md](docs/TECHNICAL_PLAN.md) — architecture
 

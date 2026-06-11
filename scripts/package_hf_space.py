@@ -22,12 +22,12 @@ HF_EXTRA_ARTIFACTS: tuple[str, ...] = (
 COPY_DIRS = ("app", "scripts")
 COPY_FILES = (
     "Dockerfile",
-    ".dockerignore",
     "requirements.txt",
     "pyproject.toml",
     "rank.py",
 )
 COPY_CHALLENGE = (
+    "challenge/candidates.jsonl",
     "challenge/sample_candidates.json",
     "challenge/candidate_schema.json",
     "challenge/validate_submission.py",
@@ -63,6 +63,13 @@ def package_hf_space(
             + "\n\nRun: python scripts/preprocess.py && python scripts/train_ltr.py"
         )
 
+    candidates_jsonl = PROJECT_ROOT / "challenge" / "candidates.jsonl"
+    if not candidates_jsonl.is_file() and not skip_validate:
+        raise FileNotFoundError(
+            "Missing full candidate pool: challenge/candidates.jsonl\n\n"
+            "Unpack candidates.jsonl.gz from the hackathon bundle into challenge/."
+        )
+
     if out_dir.exists():
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True)
@@ -82,14 +89,17 @@ def package_hf_space(
 
     shutil.copy2(PROJECT_ROOT / "hf-space" / "README.md", out_dir / "README.md")
     shutil.copy2(PROJECT_ROOT / "hf-space" / ".gitattributes", out_dir / ".gitattributes")
+    shutil.copy2(PROJECT_ROOT / "hf-space" / ".dockerignore", out_dir / ".dockerignore")
 
     print(f"Packaged HF Space -> {out_dir}")
     print(f"  Artifacts: {len(list((out_dir / 'artifacts').iterdir()))} files")
     print("\nNext steps:")
     print("  1. cd", out_dir)
     print("  2. git lfs install")
-    print("  3. git init && git remote add origin https://huggingface.co/spaces/<user>/redrob-ranker")
-    print("  4. git add . && git commit -m 'HF Docker Space' && git push")
+    print("  3. git init && git branch -M main")
+    print("  4. git remote add origin https://huggingface.co/spaces/<user>/redrob-ranker")
+    print("  5. git add . && git commit -m 'HF Docker Space'")
+    print("  6. git push -u origin main   # HF token as password when prompted")
     print("\nVerify locally: docker build -t redrob-ranker . && docker run -p 7860:7860 redrob-ranker")
 
 

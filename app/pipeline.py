@@ -55,20 +55,30 @@ class RankingPipeline:
         feature_lookup = load_feature_lookup(self.features_path)
         candidate_lookup = load_candidates_lookup(candidates_path)
 
-        recall_pool = hybrid_recall(
-            jd,
-            jd_text,
-            self.artifacts_dir,
-            bm25_k=self.settings.bm25_recall_k,
-            dense_k=self.settings.dense_recall_k,
-            pool_size=self.settings.recall_pool_size,
-            rrf_k=self.settings.rrf_k,
-            career_rrf_weight=self.settings.career_rrf_weight,
-        )
-        rrf_scores = dict(recall_pool)
-
-        pool_ids = [cid for cid, _ in recall_pool if cid in feature_lookup and cid in candidate_lookup]
-        pool_ids = [cid for cid in pool_ids if not should_hard_exclude(feature_lookup[cid])]
+        # Small candidate files (sandbox upload ≤ top_k): score all provided IDs.
+        # Full candidates.jsonl uses global hybrid recall (same path as team_sarva_automata.csv).
+        if len(candidate_lookup) <= self.settings.top_k_output:
+            pool_ids = [
+                cid
+                for cid in candidate_lookup
+                if cid in feature_lookup and not should_hard_exclude(feature_lookup[cid])
+            ]
+            pool_ids.sort()
+            rrf_scores = {cid: float(career_scores.get(cid, 0.0)) for cid in pool_ids}
+        else:
+            recall_pool = hybrid_recall(
+                jd,
+                jd_text,
+                self.artifacts_dir,
+                bm25_k=self.settings.bm25_recall_k,
+                dense_k=self.settings.dense_recall_k,
+                pool_size=self.settings.recall_pool_size,
+                rrf_k=self.settings.rrf_k,
+                career_rrf_weight=self.settings.career_rrf_weight,
+            )
+            rrf_scores = dict(recall_pool)
+            pool_ids = [cid for cid, _ in recall_pool if cid in feature_lookup and cid in candidate_lookup]
+            pool_ids = [cid for cid in pool_ids if not should_hard_exclude(feature_lookup[cid])]
 
         model = load_ltr_model(self.ltr_path)
         ltr_raw = score_candidates_by_id(model, feature_lookup, pool_ids)

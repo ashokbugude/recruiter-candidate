@@ -18,9 +18,7 @@ team_members:
 
 github_repo: "https://github.com/ashokbugude/recruiter-candidate"
 
-# Hosted sandbox: replace with HF Spaces or Docker Hub URL when published.
-# Interim: self-contained Docker per submission_spec §10.5 (README § Sandbox).
-sandbox_link: "https://github.com/ashokbugude/recruiter-candidate#sandbox-docker--fastapi"
+sandbox_link: "https://huggingface.co/spaces/ashokbugude/redrob-ranker"
 
 reproduce_command: "python rank.py --candidates ./challenge/candidates.jsonl --out ./team_sarva_automata.csv"
 

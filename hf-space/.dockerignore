@@ -1,0 +1,19 @@
+# HF Space Docker build — candidates.jsonl is bundled in the image (not excluded).
+.git
+.github
+.venv
+venv
+venev
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+htmlcov
+.env
+credentials
+colab
+docs
+tests
+team_sarva_automata.csv
+*.md
+!README.md

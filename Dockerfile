@@ -20,6 +20,7 @@ COPY scripts ./scripts
 COPY challenge/validate_submission.py ./challenge/validate_submission.py
 COPY challenge/sample_candidates.json ./challenge/sample_candidates.json
 COPY challenge/candidate_schema.json ./challenge/candidate_schema.json
+COPY challenge/candidates.jsonl ./challenge/candidates.jsonl
 COPY artifacts ./artifacts
 
 # Fail fast if rank-ready artifacts are missing from the image (HF Space / Docker).
@@ -35,6 +36,9 @@ RUN test -f artifacts/job_description.txt \
     && test -f artifacts/fusion_params.json \
     && test -f artifacts/modifier_params.json \
     && test -f artifacts/career_recall_scores.json
+
+RUN test -f challenge/candidates.jsonl \
+    && test "$(wc -l < challenge/candidates.jsonl)" -eq 100000
 
 ENV PYTHONUNBUFFERED=1
 ENV REDROB_ARTIFACTS_DIR=/app/artifacts

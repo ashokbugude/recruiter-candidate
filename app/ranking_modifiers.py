@@ -364,6 +364,9 @@ def apply_clone_cap(
     return (zone + tail)[:top_k]
 
 
+MAX_SUBMISSION_SCORE = 0.9999
+
+
 def fusion_to_submission_scores(ranked_ids: list[str], fused: dict[str, float]) -> dict[str, float]:
     """Rank-monotonic scores with model-informed spread (safe after cap/reorder)."""
     if not ranked_ids:
@@ -374,14 +377,14 @@ def fusion_to_submission_scores(ranked_ids: list[str], fused: dict[str, float]) 
     band = 0.88 / max(n - 1, 1)
 
     scores: dict[str, float] = {}
-    prev = 1.0
+    prev = MAX_SUBMISSION_SCORE
     for index, cid in enumerate(ranked_ids):
         rank_base = 0.99 - index * band
         if hi > lo + 1e-9:
             nudge = ((values[index] - lo) / (hi - lo)) * band * 0.35
         else:
             nudge = values[index] * 1e-6
-        score = rank_base + nudge
+        score = min(MAX_SUBMISSION_SCORE, rank_base + nudge)
         if index > 0:
             score = min(score, prev - 1e-4)
         score = max(0.01, score)

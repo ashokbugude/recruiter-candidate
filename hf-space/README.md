@@ -21,14 +21,25 @@ loads full FAISS/embeddings (~100K) but only ranks ≤100 candidates.
 
 First Docker build is **2–4+ GB** and may take **20–40 minutes** (artifacts + pip + models).
 
-## Try the API
+## Sandbox (submission_spec §10.5)
+
+Open the Space home page (`/`). **`candidates.jsonl` (100K rows) is pre-loaded in the Docker image** — shown as ready on page load, no file picker needed.
+
+Click **Rank and download CSV** to run live `rank.py` on the bundled pool (~5–15 min CPU).
+
+**Optional:** upload your own JSONL / JSON array to rank that file instead (overrides bundled pool). Full `candidates.jsonl` upload supported up to 100K rows.
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /health` | Artifact check |
-| `GET /rank/sample` | Rank bundled sample candidates (≤100) |
-| `POST /rank/upload` | Upload JSONL (max 500 lines) |
+| `GET /` | Pre-loaded pool + rank button (§10.5 demo UI) |
+| `GET /pool` | Bundled `candidates.jsonl` metadata |
+| `GET /health` | Artifact + pool check |
+| `POST /rank/run` | Run `rank.py` on bundled pool → CSV download |
+| `POST /rank/upload` | Rank uploaded file (overrides bundled pool) |
+| `GET /rank/sample` | API alias → `POST /rank/run` |
 | `GET /docs` | Swagger UI |
+
+CSV columns: `candidate_id,rank,score,reasoning` (submission_spec §2).
 
 ## Full submission (local / Stage 3)
 

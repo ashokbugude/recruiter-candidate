@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     sample_candidates_path: Path = Field(
         default=PROJECT_ROOT / "challenge" / "sample_candidates.json"
     )
+    submission_csv_path: Path = Field(default=PROJECT_ROOT / "team_sarva_automata.csv")
     job_description_path: Path = Field(default=PROJECT_ROOT / "artifacts" / "job_description.txt")
     jd_requirements_path: Path = Field(default=PROJECT_ROOT / "artifacts" / "jd_requirements.json")
 
@@ -90,6 +91,7 @@ class Settings(BaseSettings):
         "challenge_dir",
         "candidates_path",
         "sample_candidates_path",
+        "submission_csv_path",
         "job_description_path",
         "jd_requirements_path",
         mode="before",
