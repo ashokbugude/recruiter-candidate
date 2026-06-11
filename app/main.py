@@ -229,7 +229,7 @@ def root() -> str:
     <h2 id="default-heading">Pre-loaded candidate pool</h2>
     <p class="muted">Bundled in the Docker image — no upload needed.</p>
     <p><strong id="pool-file">{pool_label}</strong></p>
-    <p class="muted">Estimated time: 4–7 minutes for 100,000 candidates.</p>
+    <p class="muted">Estimated time: 5–9 minutes for 100,000 candidates.</p>
     <p class="logs-hint muted">Check the Space <strong>Logs</strong> tab on Hugging Face for progress while ranking.</p>
     <div class="row">
       <button type="button" id="rank-default-btn">Rank &amp; download CSV</button>
@@ -249,7 +249,7 @@ def root() -> str:
       <label for="file" class="file-btn">Choose file</label>
       <span id="file-name" class="file-name">No file chosen</span>
     </div>
-    <p class="muted" id="file-hint">Time scales with row count (4–7 min per 100,000 records).</p>
+    <p class="muted" id="file-hint">Estimated time is calculated from row count (observed ~8 min for 100,000 records).</p>
     <p class="logs-hint muted">Check the Space <strong>Logs</strong> tab on Hugging Face for progress while ranking.</p>
     <div class="row">
       <button type="button" id="rank-upload-btn" disabled>Rank uploaded file &amp; download CSV</button>
@@ -262,9 +262,13 @@ def root() -> str:
 
   <p><a href="/health">/health</a> · <a href="/pool">/pool</a> · <a href="/docs">API docs</a></p>
   <script>
-    const BASE_CANDIDATE_COUNT = 100000;
-    const EST_MIN_MINUTES = 4;
-    const EST_MAX_MINUTES = 7;
+    // Timing model from HF logs (100K pool ≈ 499s): ~90s base, ~120s full hybrid recall, ~0.41s/rerank candidate.
+    const BASE_OVERHEAD_SEC = 90;
+    const FULL_RECALL_SEC = 120;
+    const RERANK_SEC_PER_CANDIDATE = 0.41;
+    const RERANK_POOL_MAX = 700;
+    const FULL_RECALL_THRESHOLD = 100;
+
     function formatDuration(totalSeconds) {{
       const s = Math.max(0, Math.round(Number(totalSeconds) || 0));
       const m = Math.floor(s / 60);
@@ -273,10 +277,14 @@ def root() -> str:
       return `${{rem}}s`;
     }}
 
-    function estimateTimeRange(count) {{
+    function estimateSeconds(count) {{
       const n = Math.max(1, Number(count) || 1);
-      const minSec = Math.max(1, Math.floor((EST_MIN_MINUTES * 60 * n) / BASE_CANDIDATE_COUNT));
-      const maxSec = Math.max(minSec + 1, Math.ceil((EST_MAX_MINUTES * 60 * n) / BASE_CANDIDATE_COUNT));
+      const recall = n > FULL_RECALL_THRESHOLD ? FULL_RECALL_SEC : 0;
+      const rerankN = Math.min(n, RERANK_POOL_MAX);
+      return BASE_OVERHEAD_SEC + recall + rerankN * RERANK_SEC_PER_CANDIDATE;
+    }}
+
+    function formatEstimateRange(minSec, maxSec) {{
       if (maxSec < 60) {{
         return `typically ${{minSec}}–${{maxSec}} seconds`;
       }}
@@ -286,6 +294,13 @@ def root() -> str:
         return `typically ${{minM}} minute${{minM === 1 ? "" : "s"}}`;
       }}
       return `typically ${{minM}}–${{maxM}} minutes`;
+    }}
+
+    function estimateTimeRange(count) {{
+      const mid = estimateSeconds(count);
+      const minSec = Math.max(5, Math.floor(mid * 0.85));
+      const maxSec = Math.max(minSec + 1, Math.ceil(mid * 1.15));
+      return formatEstimateRange(minSec, maxSec);
     }}
 
     async function countCandidates(file) {{
@@ -349,7 +364,7 @@ def root() -> str:
         fileNameEl.textContent = file.name;
         fileHint.textContent = `Counting records in ${{file.name}}…`;
         uploadRecordCount = await countCandidates(file);
-        uploadBtn.disabled = uploadRecordCount > 0;
+        uploadBtn.disabled = uploadRecordCount <= 0;
         if (uploadRecordCount > 0) {{
           const est = estimateTimeRange(uploadRecordCount);
           fileHint.textContent =
@@ -361,7 +376,7 @@ def root() -> str:
         uploadBtn.disabled = true;
         uploadRecordCount = 0;
         fileNameEl.textContent = "No file chosen";
-        fileHint.textContent = "Time scales with row count (4–7 min per 100,000 records).";
+        fileHint.textContent = "Estimated time is calculated from row count (observed ~8 min for 100,000 records).";
       }}
     }});
 
@@ -430,7 +445,7 @@ def root() -> str:
         loader: document.getElementById("loader-default"),
         loaderText: document.getElementById("loader-default-text"),
         statusEl: document.getElementById("status-default"),
-        busyLabel: "Ranking 100,000 candidates — typically 4–7 minutes.",
+        busyLabel: "Ranking 100,000 candidates — typically 5–9 minutes.",
         fetchFn: () => fetch("/rank/run", {{ method: "POST" }}),
       }});
     }});
