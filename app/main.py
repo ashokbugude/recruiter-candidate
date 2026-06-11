@@ -178,12 +178,27 @@ def root() -> str:
     h2 {{ margin: 0 0 0.5rem; font-size: 1.05rem; }}
     a {{ color: #2563eb; }}
     button {{ cursor: pointer; padding: 0.55rem 1rem; font-size: 1rem; border-radius: 6px; border: 1px solid transparent; }}
-    button:disabled {{ opacity: 0.6; cursor: wait; }}
+    button:disabled {{ opacity: 0.6; cursor: not-allowed; }}
+    button.is-busy {{ cursor: wait; }}
     code {{ background: #f3f4f6; padding: 0.1rem 0.35rem; border-radius: 4px; }}
-    .row {{ display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.75rem; }}
-    .loader {{ display: none; align-items: center; gap: 0.4rem; color: #374151; font-size: 0.95rem; }}
-    .loader.is-active {{ display: inline-flex; }}
+    .row {{ margin-top: 0.75rem; }}
+    .loader {{
+      display: flex; align-items: center; gap: 0.4rem; color: #374151; font-size: 0.95rem;
+      margin-top: 0.5rem; max-height: 0; opacity: 0; overflow: hidden;
+      pointer-events: none; transition: max-height 0.15s ease, opacity 0.15s ease, margin 0.15s ease;
+    }}
+    .loader.is-active {{ max-height: 2rem; opacity: 1; margin-top: 0.5rem; }}
     .muted {{ color: #6b7280; font-size: 0.9rem; }}
+    .logs-hint {{ margin: 0.5rem 0 0; font-size: 0.9rem; }}
+    .file-picker {{ display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin: 0.5rem 0; }}
+    .file-input {{ position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+                   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }}
+    .file-btn {{
+      display: inline-block; padding: 0.5rem 1rem; font-size: 0.95rem; font-weight: 500;
+      border-radius: 6px; border: 1px solid #93c5fd; background: #fff; color: #1d4ed8; cursor: pointer;
+    }}
+    .file-btn:hover {{ background: #eff6ff; border-color: #60a5fa; }}
+    .file-name {{ color: #64748b; font-size: 0.9rem; }}
     .panel {{ border-radius: 10px; padding: 1rem 1.1rem; margin: 1rem 0; }}
     .panel-default {{ background: #f0fdf4; border: 2px solid #86efac; }}
     .panel-default h2 {{ color: #166534; }}
@@ -214,12 +229,13 @@ def root() -> str:
     <h2 id="default-heading">Pre-loaded candidate pool</h2>
     <p class="muted">Bundled in the Docker image — no upload needed.</p>
     <p><strong id="pool-file">{pool_label}</strong></p>
-    <p class="muted">Estimated time: 4–7 minutes for 100,000 candidates. Check the Space <strong>Logs</strong> tab on Hugging Face for progress while ranking.</p>
+    <p class="muted">Estimated time: 4–7 minutes for 100,000 candidates.</p>
+    <p class="logs-hint muted">Check the Space <strong>Logs</strong> tab on Hugging Face for progress while ranking.</p>
     <div class="row">
-      <button type="button" id="rank-default-btn">Rank bundled pool &amp; download CSV</button>
-      <span id="loader-default" class="loader" aria-live="polite">
-        <span aria-hidden="true">⏳</span> <span id="loader-default-text">Ranking…</span>
-      </span>
+      <button type="button" id="rank-default-btn">Rank &amp; download CSV</button>
+    </div>
+    <div id="loader-default" class="loader" aria-live="polite" aria-hidden="true">
+      <span aria-hidden="true">⏳</span> <span id="loader-default-text">Ranking…</span>
     </div>
     <p id="status-default" class="status-msg" role="status"></p>
   </section>
@@ -228,13 +244,18 @@ def root() -> str:
     <span class="badge badge-upload">Optional</span>
     <h2 id="upload-heading">Upload your own candidates</h2>
     <p class="muted">JSONL (one JSON per line) or JSON array. Max 100,000 rows.</p>
-    <p><input type="file" id="file" name="file" accept=".jsonl,.json,.txt"></p>
-    <p class="muted" id="file-hint">Choose a file to enable ranking below. Time scales with row count (4–7 min per 100,000 records).</p>
+    <div class="file-picker">
+      <input type="file" id="file" name="file" class="file-input" accept=".jsonl,.json,.txt">
+      <label for="file" class="file-btn">Choose file</label>
+      <span id="file-name" class="file-name">No file chosen</span>
+    </div>
+    <p class="muted" id="file-hint">Time scales with row count (4–7 min per 100,000 records).</p>
+    <p class="logs-hint muted">Check the Space <strong>Logs</strong> tab on Hugging Face for progress while ranking.</p>
     <div class="row">
       <button type="button" id="rank-upload-btn" disabled>Rank uploaded file &amp; download CSV</button>
-      <span id="loader-upload" class="loader" aria-live="polite">
-        <span aria-hidden="true">⏳</span> <span id="loader-upload-text">Ranking…</span>
-      </span>
+    </div>
+    <div id="loader-upload" class="loader" aria-live="polite" aria-hidden="true">
+      <span aria-hidden="true">⏳</span> <span id="loader-upload-text">Ranking…</span>
     </div>
     <p id="status-upload" class="status-msg" role="status"></p>
   </section>
@@ -244,8 +265,6 @@ def root() -> str:
     const BASE_CANDIDATE_COUNT = 100000;
     const EST_MIN_MINUTES = 4;
     const EST_MAX_MINUTES = 7;
-    const LOGS_HINT = " Check the Space Logs tab on Hugging Face for progress updates.";
-
     function formatDuration(totalSeconds) {{
       const s = Math.max(0, Math.round(Number(totalSeconds) || 0));
       const m = Math.floor(s / 60);
@@ -287,9 +306,11 @@ def root() -> str:
     function setLoading(loader, loaderText, active, elapsedSeconds) {{
       if (active) {{
         loader.classList.add("is-active");
+        loader.setAttribute("aria-hidden", "false");
         loaderText.textContent = `Ranking… ${{formatDuration(elapsedSeconds)}}`;
       }} else {{
         loader.classList.remove("is-active");
+        loader.setAttribute("aria-hidden", "true");
         loaderText.textContent = "Ranking…";
       }}
     }}
@@ -317,6 +338,7 @@ def root() -> str:
     const fileInput = document.getElementById("file");
     const uploadBtn = document.getElementById("rank-upload-btn");
     const fileHint = document.getElementById("file-hint");
+    const fileNameEl = document.getElementById("file-name");
     let uploadRecordCount = 0;
 
     fileInput.addEventListener("change", async (event) => {{
@@ -324,21 +346,22 @@ def root() -> str:
       if (input.files && input.files.length) {{
         const file = input.files[0];
         uploadBtn.disabled = true;
+        fileNameEl.textContent = file.name;
         fileHint.textContent = `Counting records in ${{file.name}}…`;
         uploadRecordCount = await countCandidates(file);
         uploadBtn.disabled = uploadRecordCount > 0;
         if (uploadRecordCount > 0) {{
           const est = estimateTimeRange(uploadRecordCount);
           fileHint.textContent =
-            `Selected: ${{file.name}} (${{uploadRecordCount.toLocaleString()}} candidates) — ${{est}}.`;
+            `${{uploadRecordCount.toLocaleString()}} candidates — ${{est}}.`;
         }} else {{
           fileHint.textContent = "Could not read candidate records from this file.";
         }}
       }} else {{
         uploadBtn.disabled = true;
         uploadRecordCount = 0;
-        fileHint.textContent =
-          "Choose a file to enable ranking below. Time scales with row count (4–7 min per 100,000 records).";
+        fileNameEl.textContent = "No file chosen";
+        fileHint.textContent = "Time scales with row count (4–7 min per 100,000 records).";
       }}
     }});
 
@@ -346,6 +369,7 @@ def root() -> str:
       const started = performance.now();
       let timerId = null;
       btn.disabled = true;
+      btn.classList.add("is-busy");
       statusEl.textContent = busyLabel;
       statusEl.className = "status-msg";
       setLoading(loader, loaderText, true, 0);
@@ -370,6 +394,7 @@ def root() -> str:
 
         if (timerId !== null) window.clearInterval(timerId);
         setLoading(loader, loaderText, false, 0);
+        btn.classList.remove("is-busy");
         btn.disabled = false;
 
         const disposition = response.headers.get("Content-Disposition") || "";
@@ -392,6 +417,7 @@ def root() -> str:
       }} catch (error) {{
         if (timerId !== null) window.clearInterval(timerId);
         setLoading(loader, loaderText, false, 0);
+        btn.classList.remove("is-busy");
         btn.disabled = (btn === uploadBtn) ? !(fileInput.files && fileInput.files.length) : false;
         statusEl.textContent = "Error: " + (error.message || error);
         statusEl.className = "status-msg err";
@@ -404,8 +430,7 @@ def root() -> str:
         loader: document.getElementById("loader-default"),
         loaderText: document.getElementById("loader-default-text"),
         statusEl: document.getElementById("status-default"),
-        busyLabel:
-          "Ranking bundled pool (100,000 candidates) — typically 4–7 minutes." + LOGS_HINT,
+        busyLabel: "Ranking 100,000 candidates — typically 4–7 minutes.",
         fetchFn: () => fetch("/rank/run", {{ method: "POST" }}),
       }});
     }});
@@ -422,7 +447,7 @@ def root() -> str:
         statusEl: document.getElementById("status-upload"),
         busyLabel:
           `Ranking ${{uploadRecordCount.toLocaleString()}} candidates from ${{name}} — `
-          + `${{estimateTimeRange(uploadRecordCount)}}.` + LOGS_HINT,
+          + `${{estimateTimeRange(uploadRecordCount)}}.`,
         fetchFn: () => fetch("/rank/upload", {{ method: "POST", body }}),
       }});
     }});
