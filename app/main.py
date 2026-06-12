@@ -249,7 +249,7 @@ def root() -> str:
       <label for="file" class="file-btn">Choose file</label>
       <span id="file-name" class="file-name">No file chosen</span>
     </div>
-    <p class="muted" id="file-hint">Estimated time is calculated from row count (observed ~8 min for 100,000 records).</p>
+    <p class="muted" id="file-hint">Estimated time scales with row count (~20s for 50 rows; ~8 min for 100,000).</p>
     <p class="logs-hint muted">Check the Space <strong>Logs</strong> tab on Hugging Face for progress while ranking.</p>
     <div class="row">
       <button type="button" id="rank-upload-btn" disabled>Rank uploaded file &amp; download CSV</button>
@@ -261,10 +261,11 @@ def root() -> str:
   </section>
 
   <script>
-    // Timing model from HF logs (100K pool ≈ 499s): ~90s base, ~120s full hybrid recall, ~0.41s/rerank candidate.
-    const BASE_OVERHEAD_SEC = 90;
-    const FULL_RECALL_SEC = 120;
-    const RERANK_SEC_PER_CANDIDATE = 0.41;
+    // Observed HF timings: 50-upload sample → 21s (24 eligible after honeypot exclude); 100K → 499s.
+    const SMALL_FIXED_SEC = 9;
+    const SMALL_RERANK_SEC = 0.58;
+    const SMALL_ELIGIBLE_RATIO = 0.48;
+    const FULL_POOL_SEC = 499;
     const RERANK_POOL_MAX = 700;
     const FULL_RECALL_THRESHOLD = 100;
 
@@ -278,9 +279,12 @@ def root() -> str:
 
     function estimateSeconds(count) {{
       const n = Math.max(1, Number(count) || 1);
-      const recall = n > FULL_RECALL_THRESHOLD ? FULL_RECALL_SEC : 0;
-      const rerankN = Math.min(n, RERANK_POOL_MAX);
-      return BASE_OVERHEAD_SEC + recall + rerankN * RERANK_SEC_PER_CANDIDATE;
+      if (n > FULL_RECALL_THRESHOLD) {{
+        return FULL_POOL_SEC;
+      }}
+      const eligible = Math.max(1, Math.ceil(n * SMALL_ELIGIBLE_RATIO));
+      const rerankN = Math.min(eligible, n, RERANK_POOL_MAX);
+      return SMALL_FIXED_SEC + rerankN * SMALL_RERANK_SEC;
     }}
 
     function formatEstimateRange(minSec, maxSec) {{
@@ -375,7 +379,7 @@ def root() -> str:
         uploadBtn.disabled = true;
         uploadRecordCount = 0;
         fileNameEl.textContent = "No file chosen";
-        fileHint.textContent = "Estimated time is calculated from row count (observed ~8 min for 100,000 records).";
+        fileHint.textContent = "Estimated time scales with row count (~20s for 50 rows; ~8 min for 100,000).";
       }}
     }});
 
