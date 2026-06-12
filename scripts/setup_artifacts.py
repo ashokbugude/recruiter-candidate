@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import shutil
 import sys
 from pathlib import Path
 
@@ -17,38 +16,31 @@ from app.logging_setup import configure_logging  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-# Source files inside challenge/ → artifacts/
-DOC_MAPPINGS: dict[str, str] = {
-    "job_description.txt": "challenge/_extracted/job_description.txt",
-    "submission_spec.txt": "challenge/_extracted/submission_spec.txt",
-    "redrob_signals_doc.txt": "challenge/_extracted/redrob_signals_doc.txt",
-    "README_challenge.txt": "challenge/_extracted/README.txt",
-}
+REFERENCE_DOCS: tuple[str, ...] = (
+    "job_description.txt",
+    "submission_spec.txt",
+    "redrob_signals_doc.txt",
+    "README_challenge.txt",
+)
 
 
-def copy_reference_docs(settings, force: bool = False) -> list[Path]:
-    """Copy challenge reference documents into artifacts/."""
+def ensure_reference_docs(settings, *, force: bool = False) -> list[Path]:
+    """Ensure challenge reference documents exist under artifacts/."""
     settings.ensure_artifacts_dir()
-    copied: list[Path] = []
+    present: list[Path] = []
 
-    for dest_name, src_rel in DOC_MAPPINGS.items():
-        src = PROJECT_ROOT / src_rel
-        dest = settings.artifacts_dir / dest_name
-
-        if not src.exists():
-            logger.warning("Source not found, skipping: %s", src)
+    for name in REFERENCE_DOCS:
+        dest = settings.artifacts_dir / name
+        if dest.exists():
+            logger.info("Present: %s", dest.name)
+            present.append(dest)
             continue
+        if force:
+            logger.warning("Missing (not auto-copied): %s", dest)
+        else:
+            logger.warning("Missing: %s — copy from challenge bundle or run preprocess", dest)
 
-        if dest.exists() and not force:
-            logger.info("Already exists, skipping: %s", dest.name)
-            copied.append(dest)
-            continue
-
-        shutil.copy2(src, dest)
-        logger.info("Copied %s -> %s", src.name, dest)
-        copied.append(dest)
-
-    return copied
+    return present
 
 
 def write_gitkeep(artifacts_dir: Path) -> None:
@@ -63,7 +55,7 @@ def main() -> int:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Overwrite existing artifact documents.",
+        help="Report missing reference docs (no automatic copy).",
     )
     args = parser.parse_args()
 
@@ -71,13 +63,17 @@ def main() -> int:
     configure_logging(settings.log_level)
 
     write_gitkeep(settings.artifacts_dir)
-    copied = copy_reference_docs(settings, force=args.force)
+    present = ensure_reference_docs(settings, force=args.force)
 
-    if not copied:
-        logger.error("No documents copied. Run from project root after extracting challenge docs.")
+    if len(present) < len(REFERENCE_DOCS):
+        logger.error(
+            "Artifacts incomplete (%d/%d reference docs). See artifacts/ARTIFACTS.md.",
+            len(present),
+            len(REFERENCE_DOCS),
+        )
         return 1
 
-    logger.info("Artifacts ready at %s (%d files)", settings.artifacts_dir, len(copied))
+    logger.info("Artifacts ready at %s", settings.artifacts_dir)
     return 0
 
 

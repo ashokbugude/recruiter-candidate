@@ -220,6 +220,12 @@ __marimo__/
 # Preprocess logs (not needed in repo)
 artifacts/*.log
 
+# Generated reports / sandbox outputs (rebuild via scripts)
+artifacts/eda_report.json
+artifacts/submission_audit.json
+artifacts/fusion_tuning_report.json
+artifacts/sample_ranked.csv
+
 # Generated preprocess outputs — rebuild via scripts/preprocess.py or Colab
 artifacts/*.parquet
 artifacts/*.npy
