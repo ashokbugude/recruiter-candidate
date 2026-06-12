@@ -66,8 +66,8 @@ def hybrid_recall(
     pool_size: int = 2000,
     rrf_k: int = 60,
     career_rrf_weight: float = 0.65,
-) -> list[tuple[str, float]]:
-    """Return top recall pool as (candidate_id, rrf_score) pairs."""
+) -> tuple[list[tuple[str, float]], dict[str, float]]:
+    """Return top recall pool and full fused RRF scores (all recalled IDs)."""
     query_text = build_jd_query_text(jd, jd_text)
 
     bm25 = load_bm25(artifacts_dir / "bm25.pkl")
@@ -97,7 +97,7 @@ def hybrid_recall(
         len(fused),
         len(ranked),
     )
-    return ranked
+    return ranked, fused
 
 
 def normalize_scores(values: dict[str, float]) -> dict[str, float]:

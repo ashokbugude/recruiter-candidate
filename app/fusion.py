@@ -138,7 +138,7 @@ def build_fusion_cache(
     feature_lookup = load_feature_lookup(artifacts_dir / "candidate_features.parquet")
     candidate_lookup = load_candidates_lookup(candidates_path)
 
-    recall_pool = hybrid_recall(
+    recall_pool, rrf_scores = hybrid_recall(
         jd,
         jd_text,
         artifacts_dir,
@@ -148,7 +148,6 @@ def build_fusion_cache(
         rrf_k=settings.rrf_k,
         career_rrf_weight=settings.career_rrf_weight,
     )
-    rrf_scores = dict(recall_pool)
 
     pool_ids = [cid for cid, _ in recall_pool if cid in feature_lookup]
     pool_ids = [cid for cid in pool_ids if not should_hard_exclude(feature_lookup[cid])]

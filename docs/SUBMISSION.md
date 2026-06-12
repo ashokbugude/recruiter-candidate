@@ -33,5 +33,5 @@ python scripts/build_methodology_deck.py --export-pdf docs/Sarva_Automata_Method
 
 ## Do not upload
 
-- `sample_ranked.csv` — HF sandbox demo only (24 rows)
+- `sample_ranked.csv` — HF sandbox demo only (same pipeline as 100K; output = hybrid recall ∩ upload)
 - `artifacts/` binaries — stay local / HF Space, not main GitHub

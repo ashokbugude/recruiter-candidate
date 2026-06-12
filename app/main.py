@@ -249,7 +249,7 @@ def root() -> str:
       <label for="file" class="file-btn">Choose file</label>
       <span id="file-name" class="file-name">No file chosen</span>
     </div>
-    <p class="muted" id="file-hint">Estimated time scales with row count (~20s for 50 rows; ~8 min for 100,000).</p>
+    <p class="muted" id="file-hint">Same pipeline as 100K (includes hybrid recall) — typically ~2–3 min for uploads; ~8 min for 100,000.</p>
     <p class="logs-hint muted">Check the Space <strong>Logs</strong> tab on Hugging Face for progress while ranking.</p>
     <div class="row">
       <button type="button" id="rank-upload-btn" disabled>Rank uploaded file &amp; download CSV</button>
@@ -261,10 +261,10 @@ def root() -> str:
   </section>
 
   <script>
-    // Observed HF timings: 50-upload sample → 21s (24 eligible after honeypot exclude); 100K → 499s.
-    const SMALL_FIXED_SEC = 9;
-    const SMALL_RERANK_SEC = 0.58;
-    const SMALL_ELIGIBLE_RATIO = 0.48;
+    // Observed HF timings: all paths run full hybrid recall; 100K → 499s; small upload ~2–3 min.
+    const FULL_RECALL_SEC = 120;
+    const CE_LOAD_SEC = 7;
+    const RERANK_SEC = 0.58;
     const FULL_POOL_SEC = 499;
     const RERANK_POOL_MAX = 700;
     const FULL_RECALL_THRESHOLD = 100;
@@ -282,9 +282,8 @@ def root() -> str:
       if (n > FULL_RECALL_THRESHOLD) {{
         return FULL_POOL_SEC;
       }}
-      const eligible = Math.max(1, Math.ceil(n * SMALL_ELIGIBLE_RATIO));
-      const rerankN = Math.min(eligible, n, RERANK_POOL_MAX);
-      return SMALL_FIXED_SEC + rerankN * SMALL_RERANK_SEC;
+      const rerankN = Math.max(1, Math.min(n, RERANK_POOL_MAX));
+      return FULL_RECALL_SEC + CE_LOAD_SEC + rerankN * RERANK_SEC;
     }}
 
     function formatEstimateRange(minSec, maxSec) {{
@@ -379,7 +378,8 @@ def root() -> str:
         uploadBtn.disabled = true;
         uploadRecordCount = 0;
         fileNameEl.textContent = "No file chosen";
-        fileHint.textContent = "Estimated time scales with row count (~20s for 50 rows; ~8 min for 100,000).";
+        fileHint.textContent =
+          "Same pipeline as 100K (includes hybrid recall) — typically ~2–3 min for uploads; ~8 min for 100,000.";
       }}
     }});
 
