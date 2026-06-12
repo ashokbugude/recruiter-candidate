@@ -167,7 +167,7 @@ def root() -> str:
         if _artifacts_ok
         else f"{BUNDLED_POOL_NAME} (not loaded)"
     )
-    status = "ready" if _artifacts_ok else "artifacts unavailable — check /health"
+    status = "ready" if _artifacts_ok else "unavailable — ranking artifacts not loaded"
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -260,7 +260,6 @@ def root() -> str:
     <p id="status-upload" class="status-msg" role="status"></p>
   </section>
 
-  <p><a href="/health">/health</a> · <a href="/pool">/pool</a> · <a href="/docs">API docs</a></p>
   <script>
     // Timing model from HF logs (100K pool ≈ 499s): ~90s base, ~120s full hybrid recall, ~0.41s/rerank candidate.
     const BASE_OVERHEAD_SEC = 90;
